@@ -367,6 +367,7 @@
     <div class="check-bar" hidden id="checkBar"><i id="checkFill"></i></div>
     <ul class="check-list" id="checkList"></ul>
     <div class="row">
+      <button id="copyDead" hidden>Copier la liste pour Claude</button>
       <button id="checkBtn" class="primary">Tester toutes les radios</button>
     </div>
   </div>
@@ -434,7 +435,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v11",
+    version: "v12",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1149,6 +1150,8 @@
     checking = true;
     const list = $("checkList"), radios = [...state.radio];
     const status = {};
+    const dead = [];
+    $("copyDead").hidden = true;
     let doneCount = 0, okCount = 0;
     list.innerHTML = "";
     $("checkBar").hidden = false;
@@ -1174,6 +1177,7 @@
         li.scrollIntoView({ block: "nearest" });
         const r = await testRadio(c);
         status[c.id] = r.ok;
+        if (!r.ok) dead.push(c.name + " | " + r.why + " | " + [c.url, ...(c.alts || [])].join(" , "));
         // Si seul le lien de secours marche, il devient le lien principal.
         if (r.ok && r.url !== c.url) { c.alts = [c.url, ...(c.alts || []).filter((u) => u !== r.url)]; c.url = r.url; }
         li.firstChild.textContent = r.ok ? "✅" : "❌";
@@ -1189,6 +1193,8 @@
     $("checkBtn").textContent = "Tester toutes les radios";
     $("checkNote").textContent = (stopped ? "Test arrêté · " : "Test terminé · ")
       + `${okCount} radios marchent, ${doneCount - okCount} hors service sur ${doneCount} testées.`;
+    state.deadReport = `BG TV ${state.version} — ${dead.length} radios hors service sur ${doneCount} testées\n` + dead.join("\n");
+    $("copyDead").hidden = !dead.length;
     render();
   }
 
@@ -1226,6 +1232,21 @@
   $("settingsBtn").onclick = () => { renderSettings(); $("settings").showModal(); };
   $("closeSettings").onclick = () => $("settings").close();
   $("checkBtn").onclick = checkAllRadios;
+  // Copie la liste des radios en panne (nom | raison | liens) pour la coller dans la conversation.
+  $("copyDead").onclick = async () => {
+    const text = state.deadReport || "";
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch {}
+    if (!ok && navigator.share) { try { await navigator.share({ title: "Radios hors service", text }); ok = true; } catch {} }
+    if (!ok) {
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.append(ta); ta.select();
+      try { ok = document.execCommand("copy"); } catch {}
+      ta.remove();
+    }
+    $("copyDead").textContent = ok ? "Liste copiée ✓" : "Copie impossible";
+    setTimeout(() => ($("copyDead").textContent = "Copier la liste pour Claude"), 3000);
+  };
   $("reloadBtn").onclick = () => { $("settings").close(); loadAll(); };
   $("addM3u").onclick = () => {
     const url = $("m3uUrl").value.trim();
