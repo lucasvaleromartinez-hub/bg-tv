@@ -5,3 +5,4 @@ wrangler.toml
 README.md
 .assetsignore
 node_modules
+.wrangler
