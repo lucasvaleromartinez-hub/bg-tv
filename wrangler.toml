@@ -1,0 +1,9 @@
+# BG TV sur Cloudflare : l'appli + le relais des flux, au même endroit.
+name = "bg-tv"
+main = "relais/worker.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = ["/r"]

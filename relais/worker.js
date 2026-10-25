@@ -102,11 +102,15 @@ async function getStream(target, extra) {
 }
 
 export default {
-  async fetch(req) {
+  async fetch(req, env) {
+    const here0 = new URL(req.url);
+    // Hors /r : on sert l'appli BG TV elle-même (fichiers du dépôt).
+    if (here0.pathname !== "/r" && env && env.ASSETS) return env.ASSETS.fetch(req);
     const origin = req.headers.get("origin") || "";
     const referer = req.headers.get("referer") || "";
-    const okOrigin = !origin || ALLOWED_ORIGINS.includes(origin);
-    const okReferer = !referer || ALLOWED_ORIGINS.some((o) => referer.startsWith(o));
+    const allowed = [...ALLOWED_ORIGINS, here0.origin];
+    const okOrigin = !origin || allowed.includes(origin);
+    const okReferer = !referer || allowed.some((o) => referer.startsWith(o));
     if (!okOrigin || !okReferer) return new Response("Accès refusé", { status: 403 });
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(origin) });
 

@@ -401,8 +401,9 @@
     const p = new URLSearchParams(location.search).get("relais");
     if (p !== null) localStorage.setItem("relay", JSON.stringify(p.replace(/\/+$/, "")));
   } catch {}
-  let RELAY = DEFAULT_RELAY;
-  try { RELAY = JSON.parse(localStorage.getItem("relay")) || DEFAULT_RELAY; } catch {}
+  // Appli hébergée sur Cloudflare : le relais est au même endroit.
+  let RELAY = /\.workers\.dev$|\.pages\.dev$/.test(location.hostname) ? location.origin : DEFAULT_RELAY;
+  try { RELAY = JSON.parse(localStorage.getItem("relay")) || RELAY; } catch {}
   const relay = (u) => (RELAY ? RELAY + "/r?u=" + encodeURIComponent(u) : null);
   // Liens à essayer, dans l'ordre, pour un flux d'origine.
   function candidates(...originals) {
@@ -553,7 +554,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v32",
+    version: "v33",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
