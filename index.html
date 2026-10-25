@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BG TV</title>
+<meta name="theme-color" content="#0d0f14">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --panel: #171a22;
+    --panel-2: #222633;
+    --text: #f3f4f7;
+    --muted: #9aa1b2;
+    --accent: #00966e;
+    --accent-2: #d62612;
+    --star: #ffc93c;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 18px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow-x: hidden;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+
+  header {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 20px;
+    background: rgba(13, 15, 20, .94);
+    backdrop-filter: blur(10px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 26px; margin-right: auto; }
+  .flag { width: 34px; height: 24px; border-radius: 4px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr 1fr; }
+  .flag i:nth-child(1) { background: #fff; } .flag i:nth-child(2) { background: var(--accent); } .flag i:nth-child(3) { background: var(--accent-2); }
+
+  .tabs { display: flex; gap: 8px; background: var(--panel); padding: 6px; border-radius: 999px; }
+  .tab { padding: 12px 22px; border-radius: 999px; font-weight: 700; color: var(--muted); min-height: 52px; }
+  .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
+
+  .search {
+    flex: 1 1 220px; max-width: 340px; min-height: 52px;
+    padding: 0 18px; border-radius: 999px; border: 0;
+    background: var(--panel); color: var(--text); font: inherit;
+  }
+  .icon-btn { width: 52px; height: 52px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-size: 24px; }
+
+  main { padding: 6px 20px 120px; }
+  .status { color: var(--muted); padding: 30px 0; text-align: center; font-size: 20px; }
+  h2 { margin: 26px 0 12px; font-size: 22px; color: var(--muted); font-weight: 700; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+  .tile {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    min-height: 150px; padding: 16px 10px 14px;
+    background: var(--panel); border-radius: var(--radius); text-align: center;
+    transition: transform .12s, background .12s;
+  }
+  .tile:active { transform: scale(.96); background: var(--panel-2); }
+  .tile.playing { outline: 3px solid var(--accent); }
+  .logo { width: 100%; height: 72px; display: grid; place-items: center; }
+  .logo img { max-width: 120px; max-height: 72px; object-fit: contain; }
+  .logo .fallback {
+    width: 72px; height: 72px; border-radius: 16px; display: grid; place-items: center;
+    background: var(--panel-2); font-weight: 800; font-size: 26px; color: var(--muted);
+  }
+  .tile .name { font-weight: 700; font-size: 17px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .tile .fav { position: absolute; top: 8px; right: 10px; color: var(--star); font-size: 20px; }
+
+  /* Lecteur */
+  .player {
+    position: fixed; inset: 0; z-index: 20; background: #000;
+    display: none; flex-direction: column;
+  }
+  .player.open { display: flex; }
+  .player video { flex: 1; width: 100%; min-height: 0; background: #000; }
+  .radio-art {
+    position: absolute; inset: 0 0 110px; display: none; place-items: center; pointer-events: none;
+  }
+  .player.radio .radio-art { display: grid; }
+  .radio-art img { max-width: 40vmin; max-height: 40vmin; border-radius: 24px; background: #fff; padding: 12px; }
+  .radio-art .fallback { width: 30vmin; height: 30vmin; border-radius: 24px; background: var(--panel); display: grid; place-items: center; font-size: 12vmin; font-weight: 800; color: var(--muted); }
+  .bar {
+    display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+    background: var(--panel); min-height: 110px;
+  }
+  .bar .info { margin-right: auto; min-width: 0; }
+  .bar .title { font-size: 24px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .sub { color: var(--muted); }
+  .ctrl { width: 72px; height: 72px; border-radius: 50%; background: var(--panel-2); font-size: 30px; display: grid; place-items: center; }
+  .ctrl.big { width: 84px; height: 84px; background: var(--accent); color: #fff; font-size: 34px; }
+  .ctrl.star { color: var(--star); }
+  .message {
+    position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
+    max-width: 80%; padding: 18px 24px; border-radius: var(--radius);
+    background: rgba(23, 26, 34, .95); text-align: center; font-size: 20px; display: none;
+  }
+  .message.show { display: block; }
+  .message button { margin-top: 14px; padding: 14px 24px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; }
+
+  /* Mini lecteur */
+  .mini {
+    position: fixed; left: 20px; right: 20px; bottom: 16px; z-index: 10;
+    display: none; align-items: center; gap: 14px; padding: 12px 16px;
+    background: var(--panel-2); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.5);
+  }
+  .mini.show { display: flex; }
+  .mini .title { font-weight: 800; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini .ctrl { width: 60px; height: 60px; font-size: 24px; }
+
+  /* Réglages */
+  dialog { background: var(--panel); color: var(--text); border: 0; border-radius: var(--radius); width: min(560px, 92vw); padding: 24px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog input { width: 100%; min-height: 52px; margin: 8px 0; padding: 0 14px; border-radius: 12px; border: 0; background: var(--panel-2); color: var(--text); font: inherit; }
+  dialog .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+  dialog .row button { padding: 14px 22px; border-radius: 999px; background: var(--panel-2); font-weight: 700; }
+  dialog .row button.primary { background: var(--accent); color: #fff; }
+  .lists { list-style: none; padding: 0; margin: 10px 0; }
+  .lists li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--panel-2); word-break: break-all; }
+  .lists li span { margin-right: auto; }
+  .note { color: var(--muted); font-size: 15px; }
+
+  @media (max-width: 600px) {
+    header { padding: 10px 16px; gap: 10px; }
+    .search { flex: 1 1 0; max-width: none; min-width: 0; }
+    main { padding: 4px 16px 110px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+    .tile { min-height: 130px; }
+    .bar { flex-wrap: wrap; justify-content: center; }
+    .bar .info { width: 100%; margin: 0; text-align: center; }
+    .ctrl { width: 60px; height: 60px; }
+    .ctrl.big { width: 72px; height: 72px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="flag"><i></i><i></i><i></i></span>BG TV</div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="fav">★ Favoris</button>
+    <button class="tab" role="tab" data-tab="tv">TV</button>
+    <button class="tab" role="tab" data-tab="radio">Radio</button>
+  </div>
+  <input class="search" type="search" placeholder="Rechercher…" aria-label="Rechercher une chaîne">
+  <button class="icon-btn" id="settingsBtn" aria-label="Réglages">⚙︎</button>
+</header>
+
+<main id="list"><p class="status">Chargement des chaînes…</p></main>
+
+<div class="mini" id="mini">
+  <span class="title" id="miniTitle"></span>
+  <button class="ctrl" id="miniPlay" aria-label="Lecture / pause">⏸</button>
+  <button class="ctrl" id="miniOpen" aria-label="Ouvrir le lecteur">⤢</button>
+</div>
+
+<section class="player" id="player" aria-label="Lecteur">
+  <video id="video" playsinline></video>
+  <div class="radio-art" id="radioArt"></div>
+  <div class="message" id="message"></div>
+  <div class="bar">
+    <button class="ctrl" id="closeBtn" aria-label="Retour à la liste">⌄</button>
+    <div class="info">
+      <div class="title" id="title"></div>
+      <div class="sub" id="sub"></div>
+    </div>
+    <button class="ctrl star" id="favBtn" aria-label="Favori">☆</button>
+    <button class="ctrl" id="prevBtn" aria-label="Chaîne précédente">⏮</button>
+    <button class="ctrl big" id="playBtn" aria-label="Lecture / pause">⏸</button>
+    <button class="ctrl" id="nextBtn" aria-label="Chaîne suivante">⏭</button>
+    <button class="ctrl" id="fullBtn" aria-label="Plein écran">⛶</button>
+  </div>
+</section>
+
+<dialog id="settings">
+  <h3 style="margin-top:0">Mes playlists M3U</h3>
+  <p class="note">Comme dans APTV : ajoutez le lien d'une playlist M3U pour avoir d'autres chaînes.</p>
+  <ul class="lists" id="customLists"></ul>
+  <input id="m3uName" placeholder="Nom (ex. : Ma liste)">
+  <input id="m3uUrl" type="url" placeholder="https://…/playlist.m3u">
+  <div class="row">
+    <button id="reloadBtn">Recharger</button>
+    <button id="addM3u" class="primary">Ajouter</button>
+    <button id="closeSettings">Fermer</button>
+  </div>
+  <p class="note">La vidéo ne s'affiche que voiture à l'arrêt : c'est la voiture qui l'impose.</p>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<script>
+(() => {
+  const TV_PLAYLIST = "https://iptv-org.github.io/iptv/countries/bg.m3u";
+  const RADIO_SERVERS = ["https://de1.api.radio-browser.info", "https://de2.api.radio-browser.info", "https://nl1.api.radio-browser.info"];
+  const RADIO_QUERY = "/json/stations/search?countrycode=BG&hidebroken=true&order=votes&reverse=true&limit=200";
+
+  const GROUPS_FR = {
+    music: "Musique", general: "Généraliste", news: "Info", kids: "Enfants", movies: "Films", series: "Séries",
+    sports: "Sport", entertainment: "Divertissement", religious: "Religion", documentary: "Documentaires",
+    culture: "Culture", education: "Éducation", business: "Économie", cooking: "Cuisine", travel: "Voyage",
+    comedy: "Comédie", family: "Famille", lifestyle: "Style de vie", weather: "Météo", legislative: "Politique",
+    shop: "Téléachat", auto: "Auto", animation: "Animation", classic: "Classiques", outdoor: "Nature",
+    science: "Science", undefined: "Autres"
+  };
+
+  const store = {
+    get(key, fallback) {
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+    }
+  };
+
+  const state = {
+    tab: store.get("tab", "tv"),
+    query: "",
+    tv: [],
+    radio: [],
+    favorites: new Set(store.get("favorites", [])),
+    customLists: store.get("customLists", []),
+    current: null,
+    queue: [],
+    loading: true,
+    errors: []
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const video = $("video");
+  let hls = null;
+
+  // ---------- Chargement des chaînes ----------
+
+  function parseM3U(text, kind, defaultGroup) {
+    const out = [];
+    let pending = null;
+    for (const raw of text.split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line.startsWith("#EXTINF")) {
+        const attrs = {};
+        for (const m of line.matchAll(/([\w-]+)="([^"]*)"/g)) attrs[m[1].toLowerCase()] = m[2];
+        let name = "";
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          if (line[i] === '"') inQuotes = !inQuotes;
+          else if (line[i] === "," && !inQuotes) { name = line.slice(i + 1).trim(); break; }
+        }
+        const rawGroup = (attrs["group-title"] || "").split(";")[0].trim();
+        pending = {
+          name: cleanName(name || attrs["tvg-name"] || ""),
+          logo: attrs["tvg-logo"] || "",
+          group: rawGroup ? (GROUPS_FR[rawGroup.toLowerCase()] || rawGroup) : defaultGroup
+        };
+      } else if (!line.startsWith("#") && /^https?:\/\//i.test(line)) {
+        const info = pending || { name: line.split("/").pop(), logo: "", group: defaultGroup };
+        out.push({ id: line, url: line, kind, ...info });
+        pending = null;
+      }
+    }
+    return out;
+  }
+
+  function cleanName(name) {
+    return name
+      .replace(/\s*\(\d{3,4}[pi]\)/g, "")
+      .replace("[Geo-blocked]", "(géo-bloquée)")
+      .replace("[Not 24/7]", "(pas 24h/24)")
+      .trim();
+  }
+
+  async function loadTV() {
+    const lists = [{ name: "TV bulgares", url: TV_PLAYLIST }, ...state.customLists];
+    const all = [];
+    for (const list of lists) {
+      try {
+        const res = await fetch(list.url, { cache: "no-cache" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        all.push(...parseM3U(await res.text(), "tv", list === lists[0] ? "Autres" : list.name));
+      } catch (e) {
+        state.errors.push(`${list.name} : ${e.message}`);
+      }
+    }
+    state.tv = dedupe(all);
+  }
+
+  async function loadRadio() {
+    for (const server of RADIO_SERVERS) {
+      try {
+        const res = await fetch(server + RADIO_QUERY);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const stations = await res.json();
+        state.radio = dedupe(stations
+          .filter((s) => s.url_resolved)
+          .map((s) => ({
+            id: s.url_resolved, url: s.url_resolved, kind: "radio",
+            name: s.name.trim(), logo: s.favicon || "",
+            group: /chalga|чалга|folk|фолк/i.test(s.tags) ? "Chalga & folk" : "Radios"
+          })));
+        return;
+      } catch (e) {
+        if (server === RADIO_SERVERS.at(-1)) state.errors.push("Radios : " + e.message);
+      }
+    }
+  }
+
+  function dedupe(list) {
+    const seen = new Set();
+    // Une page https ne peut pas lire un flux http : on ne garde que les flux https.
+    return list.filter((c) => c.url.startsWith("https://") && !seen.has(c.id) && seen.add(c.id));
+  }
+
+  async function loadAll() {
+    state.loading = true;
+    state.errors = [];
+    render();
+    await Promise.all([loadTV(), loadRadio()]);
+    state.loading = false;
+    render();
+    const last = store.get("last", null);
+    if (last && !state.current) {
+      const channel = allChannels().find((c) => c.id === last);
+      if (channel) showMini(channel, false);
+    }
+  }
+
+  const allChannels = () => [...state.tv, ...state.radio];
+
+  // ---------- Affichage de la liste ----------
+
+  function groupsFor(channels) {
+    const map = new Map();
+    for (const c of channels) {
+      if (!map.has(c.group)) map.set(c.group, []);
+      map.get(c.group).push(c);
+    }
+    return [...map.entries()].sort(([a], [b]) => {
+      const ma = /musique|chalga/i.test(a), mb = /musique|chalga/i.test(b);
+      if (ma !== mb) return ma ? -1 : 1;
+      return a.localeCompare(b, "fr");
+    });
+  }
+
+  function render() {
+    document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.tab === state.tab));
+    const list = $("list");
+    list.innerHTML = "";
+
+    if (state.loading) {
+      list.innerHTML = '<p class="status">Chargement des chaînes…</p>';
+      return;
+    }
+
+    let channels = state.tab === "fav"
+      ? allChannels().filter((c) => state.favorites.has(c.id))
+      : state.tab === "radio" ? state.radio : state.tv;
+
+    const q = state.query.trim().toLowerCase();
+    if (q) channels = channels.filter((c) => c.name.toLowerCase().includes(q));
+
+    if (!channels.length) {
+      const p = document.createElement("p");
+      p.className = "status";
+      p.textContent = state.tab === "fav" && !q
+        ? "Aucun favori. Ouvrez une chaîne et touchez ☆ pour l'ajouter ici."
+        : "Aucune chaîne trouvée.";
+      list.append(p);
+    }
+
+    const sections = state.tab === "fav" ? [["Mes favoris", channels]] : groupsFor(channels);
+    for (const [name, items] of sections) {
+      if (!items.length) continue;
+      const h = document.createElement("h2");
+      h.textContent = name;
+      const grid = document.createElement("div");
+      grid.className = "grid";
+      for (const c of items) grid.append(tile(c, items));
+      list.append(h, grid);
+    }
+
+    if (state.errors.length) {
+      const p = document.createElement("p");
+      p.className = "status";
+      p.textContent = "Problème de chargement : " + state.errors.join(" · ");
+      list.append(p);
+    }
+  }
+
+  function logoNode(c, cls = "fallback") {
+    const box = document.createElement("div");
+    const fallback = () => {
+      box.innerHTML = "";
+      const f = document.createElement("div");
+      f.className = cls;
+      f.textContent = (c.name.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase();
+      box.append(f);
+    };
+    if (c.logo) {
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.src = c.logo;
+      img.onerror = fallback;
+      box.append(img);
+    } else {
+      fallback();
+    }
+    return box;
+  }
+
+  function tile(c, queue) {
+    const b = document.createElement("button");
+    b.className = "tile" + (state.current && state.current.id === c.id ? " playing" : "");
+    const logo = logoNode(c);
+    logo.className = "logo";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = c.name;
+    b.append(logo, name);
+    if (state.favorites.has(c.id)) {
+      const star = document.createElement("span");
+      star.className = "fav";
+      star.textContent = "★";
+      b.append(star);
+    }
+    b.onclick = () => play(c, queue);
+    return b;
+  }
+
+  // ---------- Lecture ----------
+
+  function play(c, queue = state.queue) {
+    state.current = c;
+    state.queue = queue.length ? queue : [c];
+    store.set("last", c.id);
+    hideMessage();
+
+    if (hls) { hls.destroy(); hls = null; }
+    video.removeAttribute("src");
+
+    const isHls = /\.m3u8(\?|$)/i.test(c.url) || c.kind === "tv";
+    if (isHls && window.Hls && Hls.isSupported()) {
+      hls = new Hls({ lowLatencyMode: false });
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (!data.fatal) return;
+        // Certains serveurs refusent hls.js : on tente le lecteur intégré du navigateur.
+        if (hls && data.type === Hls.ErrorTypes.NETWORK_ERROR && !hls._triedNative) {
+          hls._triedNative = true;
+          hls.destroy(); hls = null;
+          video.src = c.url;
+          video.play().catch(showError);
+        } else {
+          showError();
+        }
+      });
+      hls.loadSource(c.url);
+      hls.attachMedia(video);
+    } else {
+      video.src = c.url;
+    }
+    video.play().catch(() => {});
+
+    openPlayer();
+    updatePlayer();
+    updateMediaSession();
+    render();
+  }
+
+  function togglePlay() {
+    if (!state.current) return;
+    if (video.paused) {
+      // En direct : on relance le flux pour revenir au direct.
+      play(state.current);
+    } else {
+      video.pause();
+    }
+  }
+
+  function zap(step) {
+    if (!state.current || !state.queue.length) return;
+    const i = state.queue.findIndex((c) => c.id === state.current.id);
+    const next = state.queue[(i + step + state.queue.length) % state.queue.length];
+    play(next, state.queue);
+  }
+
+  function showError() {
+    const m = $("message");
+    m.innerHTML = "";
+    const text = document.createElement("div");
+    text.textContent = "Cette chaîne ne répond pas pour le moment (elle est peut-être réservée à la Bulgarie).";
+    const next = document.createElement("button");
+    next.textContent = "Chaîne suivante ⏭";
+    next.onclick = () => zap(1);
+    m.append(text, next);
+    m.classList.add("show");
+  }
+
+  function hideMessage() { $("message").classList.remove("show"); }
+
+  video.addEventListener("error", () => { if (!hls) showError(); });
+  video.addEventListener("playing", () => { hideMessage(); updatePlayer(); });
+  video.addEventListener("pause", updatePlayer);
+
+  function openPlayer() {
+    $("player").classList.add("open");
+    $("mini").classList.remove("show");
+  }
+
+  function closePlayer() {
+    $("player").classList.remove("open");
+    if (state.current) showMini(state.current, true);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+
+  function showMini(c, active) {
+    if (!active) state.current = c;
+    $("miniTitle").textContent = c.name;
+    $("miniPlay").textContent = video.paused ? "▶" : "⏸";
+    $("mini").classList.add("show");
+  }
+
+  function updatePlayer() {
+    const c = state.current;
+    if (!c) return;
+    $("title").textContent = c.name;
+    $("sub").textContent = (c.kind === "radio" ? "Radio" : "TV") + " · " + c.group + " · en direct";
+    $("favBtn").textContent = state.favorites.has(c.id) ? "★" : "☆";
+    $("playBtn").textContent = video.paused ? "▶" : "⏸";
+    $("miniPlay").textContent = video.paused ? "▶" : "⏸";
+    $("player").classList.toggle("radio", c.kind === "radio");
+    const art = $("radioArt");
+    art.innerHTML = "";
+    if (c.kind === "radio") art.append(logoNode(c));
+  }
+
+  function toggleFavorite() {
+    const c = state.current;
+    if (!c) return;
+    state.favorites.has(c.id) ? state.favorites.delete(c.id) : state.favorites.add(c.id);
+    store.set("favorites", [...state.favorites]);
+    updatePlayer();
+    render();
+  }
+
+  // Boutons du volant et écran « En lecture » de la voiture.
+  function updateMediaSession() {
+    if (!("mediaSession" in navigator) || !state.current) return;
+    const c = state.current;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: c.name,
+      artist: "BG TV · en direct",
+      artwork: c.logo ? [{ src: c.logo, sizes: "512x512" }] : []
+    });
+    const handlers = {
+      play: togglePlay,
+      pause: () => video.pause(),
+      nexttrack: () => zap(1),
+      previoustrack: () => zap(-1)
+    };
+    for (const [action, fn] of Object.entries(handlers)) {
+      try { navigator.mediaSession.setActionHandler(action, fn); } catch {}
+    }
+  }
+
+  // ---------- Réglages : playlists perso ----------
+
+  function renderSettings() {
+    const ul = $("customLists");
+    ul.innerHTML = "";
+    if (!state.customLists.length) {
+      ul.innerHTML = '<li class="note">Aucune playlist ajoutée.</li>';
+    }
+    state.customLists.forEach((l, i) => {
+      const li = document.createElement("li");
+      const span = document.createElement("span");
+      span.textContent = `${l.name} — ${l.url}`;
+      const del = document.createElement("button");
+      del.className = "icon-btn";
+      del.textContent = "✕";
+      del.setAttribute("aria-label", "Supprimer");
+      del.onclick = () => {
+        state.customLists.splice(i, 1);
+        store.set("customLists", state.customLists);
+        renderSettings();
+      };
+      li.append(span, del);
+      ul.append(li);
+    });
+  }
+
+  // ---------- Événements ----------
+
+  document.querySelectorAll(".tab").forEach((t) => t.onclick = () => {
+    state.tab = t.dataset.tab;
+    store.set("tab", state.tab);
+    render();
+    window.scrollTo({ top: 0 });
+  });
+  document.querySelector(".search").addEventListener("input", (e) => { state.query = e.target.value; render(); });
+
+  $("closeBtn").onclick = closePlayer;
+  $("playBtn").onclick = togglePlay;
+  $("prevBtn").onclick = () => zap(-1);
+  $("nextBtn").onclick = () => zap(1);
+  $("favBtn").onclick = toggleFavorite;
+  $("fullBtn").onclick = () => {
+    const el = $("player");
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  };
+  $("miniPlay").onclick = (e) => {
+    e.stopPropagation();
+    if (state.current && !video.src && !hls) play(state.current);
+    else togglePlay();
+    showMini(state.current, true);
+  };
+  $("miniOpen").onclick = () => {
+    if (state.current && !video.src && !hls) play(state.current);
+    else openPlayer();
+  };
+
+  $("settingsBtn").onclick = () => { renderSettings(); $("settings").showModal(); };
+  $("closeSettings").onclick = () => $("settings").close();
+  $("reloadBtn").onclick = () => { $("settings").close(); loadAll(); };
+  $("addM3u").onclick = () => {
+    const url = $("m3uUrl").value.trim();
+    if (!/^https?:\/\//i.test(url)) { $("m3uUrl").focus(); return; }
+    const name = $("m3uName").value.trim() || new URL(url).hostname;
+    state.customLists.push({ name, url });
+    store.set("customLists", state.customLists);
+    $("m3uName").value = "";
+    $("m3uUrl").value = "";
+    renderSettings();
+    loadAll();
+  };
+
+  loadAll();
+})();
+</script>
+</body>
+</html>

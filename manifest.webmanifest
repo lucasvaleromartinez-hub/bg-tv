@@ -1,0 +1,10 @@
+{
+  "name": "BG TV",
+  "short_name": "BG TV",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0d0f14",
+  "theme_color": "#0d0f14",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
+}
