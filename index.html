@@ -223,6 +223,14 @@
   .lists li span { flex: 1; }
   .icon-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--deck-2); display: grid; place-items: center; flex: none; }
   .note { color: var(--muted); font-size: 15px; }
+  .check { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .check-bar { height: 8px; border-radius: 999px; background: var(--deck-2); overflow: hidden; margin: 12px 0 6px; }
+  .check-bar i { display: block; height: 100%; width: 0; background: var(--signal); transition: width .3s; }
+  .check-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: 40vh; overflow-y: auto; display: grid; gap: 4px; }
+  .check-list li { display: flex; gap: 10px; align-items: baseline; padding: 6px 4px; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .check-list li b { flex: 0 0 auto; width: 22px; }
+  .check-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .check-list li small { color: var(--muted); }
 
   /* ---------- Téléphone ---------- */
   @media (max-width: 760px) {
@@ -351,6 +359,15 @@
     <button id="closeSettings">Fermer</button>
   </div>
   <p class="note">La vidéo ne s'affiche que voiture à l'arrêt : c'est la voiture qui l'impose.</p>
+  <div class="check">
+    <h3>Tester les radios</h3>
+    <p class="note" id="checkNote">Essaie chaque radio une par une, sans le son. Celles qui ne répondent pas passent en bas de la liste, dans « Hors service ».</p>
+    <div class="check-bar" hidden id="checkBar"><i id="checkFill"></i></div>
+    <ul class="check-list" id="checkList"></ul>
+    <div class="row">
+      <button id="checkBtn" class="primary">Tester toutes les radios</button>
+    </div>
+  </div>
 </dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
@@ -415,7 +432,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v9",
+    version: "v10",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -615,7 +632,15 @@
 
     // Le numéro suit l'ordre de zapping de l'onglet, comme sur une télécommande.
     let number = 0;
-    const sections = state.tab === "fav" ? [["Toutes", channels]] : groupsFor(channels);
+    let sections = state.tab === "fav" ? [["Toutes", channels]] : groupsFor(channels);
+    if (state.tab === "radio") {
+      const status = store.get("radioStatus", {});
+      const dead = channels.filter((c) => status[c.id] === false);
+      if (dead.length) {
+        sections = groupsFor(channels.filter((c) => status[c.id] !== false));
+        sections.push(["Hors service (dernier test)", dead]);
+      }
+    }
     for (const [name, items] of sections) {
       const head = el("div", "section-head");
       head.append(el("h2", null, name), el("span", null, items.length + (items.length > 1 ? " chaînes" : " chaîne")));
@@ -1066,6 +1091,100 @@
     });
   }
 
+  // ---------- Test de toutes les radios ----------
+
+  // Lit un flux sans le son ; réussi dès que de l'audio arrive vraiment.
+  function testUrl(url, isHls, ms = 12000) {
+    return new Promise((resolve) => {
+      const a = new Audio();
+      a.muted = true;
+      a.preload = "auto";
+      let h = null, done = false;
+      const end = (ok, why) => {
+        if (done) return;
+        done = true;
+        clearTimeout(t);
+        if (h) h.destroy();
+        a.pause(); a.removeAttribute("src"); a.load();
+        resolve({ ok, why });
+      };
+      const t = setTimeout(() => end(false, "ne démarre pas"), ms);
+      a.addEventListener("timeupdate", () => { if (a.currentTime > 0.3) end(true); });
+      a.addEventListener("error", () => end(false, "flux illisible"));
+      if (isHls && window.Hls && Hls.isSupported()) {
+        h = new Hls();
+        h.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) end(false, "flux HLS en erreur"); });
+        h.loadSource(url);
+        h.attachMedia(a);
+      } else {
+        a.src = url;
+      }
+      a.play().catch((e) => { if (e.name !== "AbortError") end(false, e.name === "NotAllowedError" ? "lecture bloquée" : "flux illisible"); });
+    });
+  }
+
+  async function testRadio(c) {
+    let last = "";
+    for (const url of [c.url, ...(c.alts || [])]) {
+      const r = await testUrl(url, /\.m3u8(\?|$)/i.test(url) || c.hls);
+      if (r.ok) return { ok: true, url };
+      last = r.why;
+    }
+    return { ok: false, why: last };
+  }
+
+  let checking = false;
+  async function checkAllRadios() {
+    if (checking) { checking = false; return; }
+    if (!state.radio.length) return;
+    // Le lecteur en cours est coupé pour ne pas fausser le test.
+    if (state.current && state.playing) { stopStream(); state.playing = false; updatePlayer(); }
+    checking = true;
+    const list = $("checkList"), radios = [...state.radio];
+    const status = {};
+    let doneCount = 0, okCount = 0;
+    list.innerHTML = "";
+    $("checkBar").hidden = false;
+    $("checkBtn").textContent = "Arrêter le test";
+    const rows = new Map(radios.map((c) => {
+      const li = el("li");
+      li.append(el("b", null, "…"), el("span", null, c.name), el("small"));
+      list.append(li);
+      return [c.id, li];
+    }));
+    const progress = () => {
+      $("checkFill").style.width = (100 * doneCount / radios.length) + "%";
+      $("checkNote").textContent = `${doneCount} / ${radios.length} testées · ${okCount} marchent · ${doneCount - okCount} hors service`;
+    };
+    progress();
+    let next = 0;
+    // 3 radios testées en même temps pour aller plus vite.
+    const worker = async () => {
+      while (checking && next < radios.length) {
+        const c = radios[next++];
+        const li = rows.get(c.id);
+        li.firstChild.textContent = "⏳";
+        li.scrollIntoView({ block: "nearest" });
+        const r = await testRadio(c);
+        status[c.id] = r.ok;
+        // Si seul le lien de secours marche, il devient le lien principal.
+        if (r.ok && r.url !== c.url) { c.alts = [c.url, ...(c.alts || []).filter((u) => u !== r.url)]; c.url = r.url; }
+        li.firstChild.textContent = r.ok ? "✅" : "❌";
+        li.lastChild.textContent = r.ok ? "" : r.why;
+        doneCount++; if (r.ok) okCount++;
+        progress();
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    const stopped = !checking;
+    checking = false;
+    store.set("radioStatus", { ...store.get("radioStatus", {}), ...status });
+    $("checkBtn").textContent = "Tester toutes les radios";
+    $("checkNote").textContent = (stopped ? "Test arrêté · " : "Test terminé · ")
+      + `${okCount} radios marchent, ${doneCount - okCount} hors service sur ${doneCount} testées.`;
+    render();
+  }
+
   // ---------- Événements ----------
 
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => {
@@ -1099,6 +1218,7 @@
 
   $("settingsBtn").onclick = () => { renderSettings(); $("settings").showModal(); };
   $("closeSettings").onclick = () => $("settings").close();
+  $("checkBtn").onclick = checkAllRadios;
   $("reloadBtn").onclick = () => { $("settings").close(); loadAll(); };
   $("addM3u").onclick = () => {
     const url = $("m3uUrl").value.trim();
