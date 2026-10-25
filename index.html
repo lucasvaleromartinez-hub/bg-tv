@@ -380,8 +380,16 @@
   const TV_PLAYLIST = "https://iptv-org.github.io/iptv/countries/bg.m3u";
   // Relais https (Netlify) : la page est en https, le navigateur refuse donc les flux en http.
   // Le relais va chercher le flux http et le renvoie en https.
-  const RELAY = "https://bg-tv-lucas.netlify.app/r?u=";
-  const relay = (u) => RELAY + encodeURIComponent(u);
+  // Adresse du relais Cloudflare (Worker). Vide tant qu'il n'est pas en ligne.
+  const DEFAULT_RELAY = "";
+  // On peut aussi le régler une fois en ouvrant la page avec ?relais=https://….workers.dev
+  try {
+    const p = new URLSearchParams(location.search).get("relais");
+    if (p !== null) localStorage.setItem("relay", JSON.stringify(p.replace(/\/+$/, "")));
+  } catch {}
+  let RELAY = DEFAULT_RELAY;
+  try { RELAY = JSON.parse(localStorage.getItem("relay")) || DEFAULT_RELAY; } catch {}
+  const relay = (u) => (RELAY ? RELAY + "/r?u=" + encodeURIComponent(u) : null);
   // Liens à essayer, dans l'ordre, pour un flux d'origine.
   function candidates(...originals) {
     const out = [];
@@ -389,10 +397,10 @@
       if (/^https:/i.test(u)) out.push(u, relay(u));
       else out.push(relay(u), u.replace(/^http:\/\//i, "https://"));
     }
-    return [...new Set(out)];
+    return [...new Set(out.filter(Boolean))];
   }
   // Pour lire le titre en cours : on passe aussi par le relais si le serveur est en http.
-  const reach = (u) => (/^https:/i.test(u) ? u : relay(u));
+  const reach = (u) => (/^https:/i.test(u) ? u : relay(u) || u.replace(/^http:\/\//i, "https://"));
   // Plusieurs serveurs de l'annuaire, essayés dans le désordre : si l'un tombe ou change de nom, un autre répond.
   const RADIO_SERVERS = ["de1", "de2", "nl1", "fi1", "at1", "all"]
     .map((n) => `https://${n}.api.radio-browser.info`)
@@ -451,7 +459,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v13",
+    version: "v14",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
