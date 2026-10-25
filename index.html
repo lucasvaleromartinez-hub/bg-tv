@@ -357,7 +357,10 @@
 <script>
 (() => {
   const TV_PLAYLIST = "https://iptv-org.github.io/iptv/countries/bg.m3u";
-  const RADIO_SERVERS = ["https://de1.api.radio-browser.info", "https://de2.api.radio-browser.info", "https://nl1.api.radio-browser.info"];
+  // Plusieurs serveurs de l'annuaire, essayés dans le désordre : si l'un tombe ou change de nom, un autre répond.
+  const RADIO_SERVERS = ["de1", "de2", "nl1", "fi1", "at1", "all"]
+    .map((n) => `https://${n}.api.radio-browser.info`)
+    .sort(() => Math.random() - 0.5);
   const RADIO_QUERY = "/json/stations/search?countrycode=BG&hidebroken=true&order=votes&reverse=true&limit=200";
 
   // Chaînes ajoutées à la main (absentes des listes publiques).
@@ -412,7 +415,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v8",
+    version: "v9",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -491,24 +494,34 @@
   async function loadRadio() {
     for (const server of RADIO_SERVERS) {
       try {
-        const res = await fetch(server + RADIO_QUERY, { signal: AbortSignal.timeout(15000) });
+        const res = await fetch(server + RADIO_QUERY, { signal: AbortSignal.timeout(12000) });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const stations = await res.json();
-        state.radio = [...EXTRA_RADIO, ...dedupe(stations
+        if (!Array.isArray(stations) || !stations.length) throw new Error("liste vide");
+        const list = dedupe(stations
           .filter((s) => s.url_resolved)
-          .map((s) => ({
-            id: s.url_resolved, url: s.url_resolved, kind: "radio",
-            name: s.name.trim(), logo: s.favicon || "",
-            group: /chalga|чалга|folk|фолк/i.test(s.tags) ? "Chalga & folk" : "Radios"
-          })))];
+          // La page est en https : un flux http dont le serveur n'a pas de https valide ne pourra jamais être lu.
+          .filter((s) => /^https:/i.test(s.url_resolved) || /^https:/i.test(s.url || "") || !s.ssl_error)
+          .map((s) => {
+            const urls = [s.url_resolved, s.url].filter(Boolean).map((u) => u.replace(/^http:\/\//i, "https://"));
+            return {
+              id: s.url_resolved, url: urls[0], alts: [...new Set(urls.slice(1))].filter((u) => u !== urls[0]),
+              kind: "radio", hls: s.hls === 1,
+              name: s.name.trim(), logo: s.favicon || "",
+              group: /chalga|чалга|folk|фолк/i.test(s.tags) ? "Chalga & folk" : "Radios"
+            };
+          }));
+        state.radio = [...EXTRA_RADIO, ...list];
+        store.set("radioCache", list);
         return;
       } catch (e) {
-        if (server === RADIO_SERVERS.at(-1)) {
-          state.errors.push("Radios : " + e.message);
-          state.radio = [...EXTRA_RADIO];
-        }
+        state.lastRadioError = e.message;
       }
     }
+    // Aucun serveur n'a répondu : on reprend la dernière liste connue.
+    const cached = store.get("radioCache", []);
+    state.radio = [...EXTRA_RADIO, ...cached];
+    if (!cached.length) state.errors.push("Radios : " + (state.lastRadioError || "annuaire injoignable"));
   }
 
   function dedupe(list) {
@@ -704,8 +717,10 @@
 
   function stopStream() {
     if (hls) { hls.destroy(); hls = null; }
+    clearTimeout(state.stallTimer);
     video.pause();
     video.removeAttribute("src");
+    video.load(); // coupe vraiment l'ancien flux, sinon il continue de se télécharger en fond
     if (yt.getAttribute("src")) yt.removeAttribute("src");
   }
 
@@ -723,7 +738,10 @@
     state.fail = fail;
 
     if (hls) { hls.destroy(); hls = null; }
-    const isHls = /\.m3u8(\?|$)/i.test(url) || c.kind === "tv";
+    // Un flux qui ne démarre jamais ne déclenche aucune erreur : au bout de 15 s on passe au lien suivant.
+    clearTimeout(state.stallTimer);
+    state.stallTimer = setTimeout(() => { if (!state.playing) fail(); }, 15000);
+    const isHls = /\.m3u8(\?|$)/i.test(url) || c.kind === "tv" || c.hls;
     if (isHls && window.Hls && Hls.isSupported()) {
       hls = new Hls({ lowLatencyMode: false });
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -749,6 +767,7 @@
   // ---------- Titre en cours (radios) ----------
 
   const nowPlaying = { timer: null, ctrl: null };
+  const noIcy = new Set();
 
   function startNowPlaying(c) {
     stopNowPlaying();
@@ -801,7 +820,8 @@
     // 3. Serveurs Shoutcast.
     attempts.push(() => shoutcastTitle(url));
     // 4. Titre glissé dans le flux audio lui-même.
-    attempts.push(() => icyTitle(url));
+    // (une seule tentative par radio : ça ouvre une 2e connexion au flux, certains serveurs coupent alors l'écoute)
+    if (!noIcy.has(url)) attempts.push(() => icyTitle(url).then((t) => { if (!t) noIcy.add(url); return t; }, (e) => { noIcy.add(url); throw e; }));
 
     for (const attempt of attempts) {
       const title = await attempt().catch(() => "");
@@ -918,7 +938,9 @@
   function showError() {
     const m = $("message");
     m.innerHTML = "";
-    m.append(el("div", null, "Cette chaîne ne répond pas pour le moment. Elle est peut-être réservée à la Bulgarie."));
+    m.append(el("div", null, state.current && state.current.kind === "radio"
+      ? "Cette radio ne répond pas pour le moment (flux arrêté ou sans connexion sécurisée)."
+      : "Cette chaîne ne répond pas pour le moment. Elle est peut-être réservée à la Bulgarie."));
     const next = el("button", null, "Chaîne suivante");
     next.onclick = () => zap(1);
     m.append(next);
@@ -928,7 +950,7 @@
   function hideMessage() { $("message").classList.remove("show"); }
 
   video.addEventListener("error", () => { if (!hls && video.getAttribute("src") && state.fail) state.fail(); });
-  video.addEventListener("playing", () => { hideMessage(); setPlaying(true); });
+  video.addEventListener("playing", () => { clearTimeout(state.stallTimer); hideMessage(); setPlaying(true); });
   video.addEventListener("pause", () => setPlaying(false));
 
   function setPlaying(playing) {
