@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BG TV</title>
 <meta name="theme-color" content="#0d0f14">
+<meta http-equiv="Cache-Control" content="no-cache">
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -250,6 +251,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
+    version: "v4",
     customLists: store.get("customLists", []),
     current: null,
     queue: [],
@@ -258,6 +260,13 @@
   };
 
   const $ = (id) => document.getElementById(id);
+
+  // Une seule fois : Fen TV et Radio Veronika arrivent dans les favoris.
+  if (!store.get("seededExtras", false)) {
+    ["extra:fentv-clips", "extra:fentv-live", "extra:veronika"].forEach((id) => state.favorites.add(id));
+    store.set("favorites", [...state.favorites]);
+    store.set("seededExtras", true);
+  }
   const video = $("video");
   let hls = null;
 
@@ -397,7 +406,7 @@
 
     const summary = document.createElement("p");
     summary.className = "note summary";
-    summary.textContent = `${state.tv.length} chaînes TV · ${state.radio.length} radios`
+    summary.textContent = `${state.version} · ${state.tv.length} chaînes TV · ${state.radio.length} radios`
       + (state.errors.length ? " · Problème de chargement : " + state.errors.join(" · ") : "");
     list.append(summary);
 
