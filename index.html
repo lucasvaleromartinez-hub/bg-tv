@@ -545,7 +545,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v30",
+    version: "v31",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1600,6 +1600,20 @@
   };
 
   loadAll();
+
+  // Mise à jour automatique : si une version plus récente est en ligne, la page se recharge seule.
+  async function checkUpdate() {
+    try {
+      const res = await fetch(location.pathname + "?t=" + Date.now(), { cache: "no-store" });
+      const latest = ((await res.text()).match(/version: "(v\d+)"/) || [])[1];
+      if (latest && latest !== state.version && sessionStorage.getItem("updatedTo") !== latest) {
+        sessionStorage.setItem("updatedTo", latest);
+        location.replace(location.pathname + "?v=" + latest.slice(1));
+      }
+    } catch {}
+  }
+  checkUpdate();
+  setInterval(() => { if (!state.playing) checkUpdate(); }, 10 * 60 * 1000);
 })();
 </script>
 </body>
