@@ -421,7 +421,9 @@
       document.head.append(link);
     }
   }
-  const reach = (u) => (/^https:/i.test(u) ? u : relay(u) || u.replace(/^http:\/\//i, "https://"));
+  // La plupart des serveurs radio n'autorisent pas une page web à lire leur titre (CORS) :
+  // dès que le relais existe, toutes les lectures de titre passent par lui.
+  const reach = (u) => relay(u) || u.replace(/^http:\/\//i, "https://");
   // Plusieurs serveurs de l'annuaire, essayés dans le désordre : si l'un tombe ou change de nom, un autre répond.
   const RADIO_SERVERS = ["de1", "de2", "nl1", "fi1", "at1", "all"]
     .map((n) => `https://${n}.api.radio-browser.info`)
@@ -480,7 +482,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v16",
+    version: "v17",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
