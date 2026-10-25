@@ -206,6 +206,7 @@
     box-shadow: 0 10px 30px rgba(0,0,0,.4);
   }
   .yt-open .ic { width: 20px; height: 20px; }
+  .message.loading { background: rgba(20, 25, 34, .7); font-weight: 700; }
   .message {
     position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
     width: min(560px, calc(100% - 32px)); padding: 22px 24px; border-radius: var(--r-lg);
@@ -404,6 +405,22 @@
     return [...new Set(out.filter(Boolean))];
   }
   // Pour lire le titre en cours : on passe aussi par le relais si le serveur est en http.
+  // Ouvre à l'avance la connexion au serveur d'une chaîne : elle démarre plus vite quand on la lance.
+  const warmed = new Set();
+  function warm(c) {
+    if (!c || c.kind === "youtube") return;
+    for (const u of [c.url, ...(c.alts || []).slice(0, 1)]) {
+      let origin;
+      try { origin = new URL(u).origin; } catch { continue; }
+      if (warmed.has(origin) || warmed.size > 60) continue;
+      warmed.add(origin);
+      const link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = origin;
+      link.crossOrigin = "anonymous";
+      document.head.append(link);
+    }
+  }
   const reach = (u) => (/^https:/i.test(u) ? u : relay(u) || u.replace(/^http:\/\//i, "https://"));
   // Plusieurs serveurs de l'annuaire, essayés dans le désordre : si l'un tombe ou change de nom, un autre répond.
   const RADIO_SERVERS = ["de1", "de2", "nl1", "fi1", "at1", "all"]
@@ -463,7 +480,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v15",
+    version: "v16",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -586,7 +603,9 @@
     await Promise.all([loadTV(), loadRadio()]);
     state.loading = false;
     render();
+    allChannels().filter((c) => state.favorites.has(c.id)).slice(0, 12).forEach(warm);
     const last = store.get("last", null);
+    warm(allChannels().find((c) => c.id === last));
     if (last && !state.current) {
       const channel = allChannels().find((c) => c.id === last);
       if (channel) { state.current = channel; renderResume(); }
@@ -742,6 +761,8 @@
       b.append(star);
     }
     b.onclick = () => play(c, queue);
+    b.addEventListener("pointerdown", () => warm(c), { passive: true });
+    b.addEventListener("pointerenter", () => warm(c), { passive: true });
     return b;
   }
 
@@ -770,6 +791,13 @@
     }
     startNowPlaying(c);
     if (c.kind === "radio") setSongNote("Connexion…");
+    else if (c.kind === "tv") showLoading();
+    // Les chaînes précédente et suivante sont préparées pour un zapping rapide.
+    const i = state.queue.findIndex((x) => x.id === c.id);
+    if (i >= 0 && state.queue.length > 1) {
+      warm(state.queue[(i + 1) % state.queue.length]);
+      warm(state.queue[(i - 1 + state.queue.length) % state.queue.length]);
+    }
 
     openPlayer();
     updatePlayer();
@@ -803,8 +831,9 @@
     // Un flux qui ne démarre jamais ne déclenche aucune erreur : au bout de 15 s on passe au lien suivant.
     clearTimeout(state.stallTimer);
     // Radio : 8 s suffisent, au-delà on bascule sur le lien de secours (souvent plus léger, donc plus rapide).
-    state.stallTimer = setTimeout(() => { if (!state.playing) fail(); }, c.kind === "radio" ? 8000 : 15000);
+    state.stallTimer = setTimeout(() => { if (!state.playing) fail(); }, c.kind === "radio" ? 8000 : 10000);
     if (c.kind === "radio" && attempt) setSongNote("Connexion via le lien de secours…");
+    if (c.kind === "tv" && attempt) showLoading("Connexion via le lien de secours…");
     const isHls = /\.m3u8/i.test(decodeURIComponent(url)) || c.kind === "tv" || c.hls;
     if (isHls && window.Hls && Hls.isSupported()) {
       hls = new Hls({ lowLatencyMode: false });
@@ -1011,7 +1040,14 @@
     m.classList.add("show");
   }
 
-  function hideMessage() { $("message").classList.remove("show"); }
+  function hideMessage() { $("message").classList.remove("show", "loading"); }
+
+  function showLoading(text = "Connexion…") {
+    const m = $("message");
+    m.innerHTML = "";
+    m.append(el("div", null, text));
+    m.classList.add("show", "loading");
+  }
 
   video.addEventListener("error", () => { if (!hls && video.getAttribute("src") && state.fail) state.fail(); });
   video.addEventListener("playing", () => {
