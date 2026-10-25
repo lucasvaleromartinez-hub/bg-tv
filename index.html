@@ -460,6 +460,12 @@
       ]
     },
     {
+      // Flux officiel publié sur balkanika.tv (page « video »).
+      id: "extra:balkanika-radio", kind: "radio", group: "Chalga & folk", logo: "",
+      name: "Balkanika Radio",
+      url: "https://streams.radio.co/sd1bcd1376/listen"
+    },
+    {
       // Même groupe que Veronika (bTV Radio), même hébergeur Triton.
       id: "extra:njoy", kind: "radio", group: "Radios", logo: "",
       name: "N-Joy",
@@ -511,7 +517,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v22",
+    version: "v23",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -524,10 +530,10 @@
   const $ = (id) => document.getElementById(id);
 
   // Une seule fois : Fen TV et Radio Veronika arrivent dans les favoris.
-  if (!store.get("seededExtras2", false)) {
-    ["extra:njoy", "extra:darik"].forEach((id) => state.favorites.add(id));
+  if (!store.get("seededExtras3", false)) {
+    ["extra:njoy", "extra:darik", "extra:balkanika-radio"].forEach((id) => state.favorites.add(id));
     store.set("favorites", [...state.favorites]);
-    store.set("seededExtras2", true);
+    store.set("seededExtras3", true);
   }
   if (!store.get("seededExtras", false)) {
     ["extra:fentv-clips", "extra:fentv-live", "extra:veronika"].forEach((id) => state.favorites.add(id));
