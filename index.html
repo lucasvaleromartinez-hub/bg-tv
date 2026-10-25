@@ -380,6 +380,8 @@
 </dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<!-- Lecteur des flux TV « bruts » (MPEG-TS), comme Hit Mix Music, que le navigateur ne sait pas lire seul. -->
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
 <script>
 (() => {
   const TV_PLAYLIST = "https://iptv-org.github.io/iptv/countries/bg.m3u";
@@ -433,6 +435,18 @@
   // Chaînes ajoutées à la main (absentes des listes publiques).
   const EXTRA_TV = [
     {
+      id: "extra:planeta-live", kind: "youtube", group: "Musique", logo: "",
+      name: "Planeta TV · direct",
+      url: "https://www.youtube.com/embed/live_stream?channel=UCffdZGxiVRy3i9EaZF4m0wA&autoplay=1&playsinline=1",
+      open: "https://www.youtube.com/channel/UCffdZGxiVRy3i9EaZF4m0wA/live"
+    },
+    {
+      id: "extra:planeta-clips", kind: "youtube", group: "Musique", logo: "",
+      name: "Planeta TV · clips",
+      url: "https://www.youtube.com/embed/videoseries?list=UUffdZGxiVRy3i9EaZF4m0wA&autoplay=1&playsinline=1",
+      open: "https://www.youtube.com/channel/UCffdZGxiVRy3i9EaZF4m0wA/videos"
+    },
+    {
       id: "extra:fentv-live", kind: "youtube", group: "Musique", logo: "",
       name: "Fen TV · direct",
       url: "https://www.youtube.com/embed/live_stream?channel=UCxeMrViqXdLty51nKv3x-bQ&autoplay=1&playsinline=1",
@@ -449,6 +463,13 @@
   const DEAD_RADIOS = new Set(["149.13.0.80/energy-90s", "149.13.0.80/novanews.mp4", "149.13.0.80/radio1128", "149.13.0.81/radio1.ogg", "193.108.24.21:8000/fmplus", "193.108.24.21:8000/fresh", "193.108.24.6:8000/melody?file=.mp3", "193.108.24.6:8000/zrock", "193.108.24.6:8000/zrock.m3u", "31.13.223.148:8000/1_rock.mp3", "31.13.223.148:8000/city.mp3", "31.13.223.148:8000/fresh.mp3", "31.13.223.148:8000/nova.mp3", "5.104.174.128:8000/radiodobrudja", "62.204.158.5:8081/live", "79.98.108.170:8000/autodj", "79.98.108.170:8015/autodj", "79.98.108.170:8018/autodj", "79.98.108.170:8043/;", "79.98.108.170:8053/", "79.98.108.170:8059/stream", "79.98.108.170:8092/;", "79.98.108.170:8235/listen.pls", "79.98.108.170:8235/stream", "79.98.108.170:8243/listen.pls", "79.98.108.170:8243/stream", "79.98.108.170:8332/;", "79.98.108.170:8332/;stream.mp3", "79.98.108.173:8006/radioxaschove", "82.103.99.99:8000/radiosz", "83.97.65.98:9000/", "83.97.65.98:9000/Title1=Radio", "83.97.65.98:9000/listen.pls", "87.121.90.229:9000/live_128", "87.252.182.193:8000/;", "88.80.96.25:3060/", "88.80.96.25:8000/", "88.80.96.25:8020/;", "88.80.96.25:8040/", "88.87.10.53:8000/*.ogg", "91.227.77.124/cyberfolk", "91.227.77.124/keffm", "a1.virtualradio.eu:8000/discoradio", "a1.virtualradio.eu:8000/family.mp3", "a1.virtualradio.eu:8000/powerfm.mp3", "a1.virtualradio.eu:8000/rockradio", "a12.asurahosting.com/listen/darik_radio/radio.mp3", "broadcast.masters.bg:8000/live", "c30.radioboss.fm:8758/live", "cast6.asurahosting.com/proxy/iliyan12/stream.mp3", "cdn.bweb.bg/radio/classic-fm.mp3", "cdn.bweb.bg/radio/jazz-fm.mp3", "cdn.bweb.bg/radio/njoy.mp3", "dwrstream.eu/", "eilo.org/streamer.php?ch=techno", "eu1.reliastream.com/proxy/feedb?mp=/CRR64", "eu1.reliastream.com/proxy/love80?mp=/MLR80S", "eu1.reliastream.com/proxy/love80?mp=/MLR90S", "eu1.reliastream.com/proxy/mdr?mp=/MDR", "eu1.reliastream.com/proxy/metroxmas?mp=/MCR", "eu1.reliastream.com/proxy/mgr?mp=/MGR", "eu1.reliastream.com/proxy/mhr?mp=/MHR", "eu1.reliastream.com/proxy/mvr?mp=/MVR", "eu1.reliastream.com/proxy/service?mp=/service", "g5.turbohost.eu:8001/teteven", "g5.turbohost.eu:8002/stream128", "g5.turbohost.eu:8002/stream128.m3u", "g5.turbohost.eu:8003/gama128", "g5.turbohost.eu:8004/stream", "g5.turbohost.eu:8004/stream96", "g5.turbohost.eu:8006/autodj", "g5.turbohost.eu:8010/stream128", "g5.turbohost.eu:8020/stream256", "g5.turbohost.eu:8020/stream256.m3u", "listen.hotget.net:810/", "live.easyradio.bg/aac?type=.mp3", "live.hothitsfm.com/stream", "live.radiobg.co.uk:8000/live", "mpc1.mediacp.eu:8024/", "mpc1.mediacp.eu:8024/;", "mpc1.mediacp.eu:8024/listen.pls", "play-radio0.jump.bg:7666/stream", "play-radio11.jump.bg:8000/stream64_autodj", "play.global.audio/energy-90s", "play.global.audio/novanews.aac", "play.global.audio/radio1-koledahi.aac", "play.global.audio/vanillahi.aac", "play.radiomaxxfm.com/maxx-high", "radio.chanove.com:8000/stream", "radio.jump.bg:7028/live", "radio.mitropolia-sofia.org:7610/stream", "radio.ruse.bg:8010/radioruse", "radiocp.jump.bg/proxy/stan1?mp=/live", "radiometronom.com:8010/", "radyo.yayin.com.tr:4474/stream", "rnmediagroup.com:10000/;", "rnmediagroup.com:9000/;", "s10.webradio-hosting.com/proxy/fredradiobg/stream", "s8.yesstreaming.net:17051/autodj", "samcloud.spacial.com/api/listen?sid=99064&m=sc&rid=175019&t=ssl", "stream-40.zeno.fm/hku46gxdexquv?zs=d8gnzJrzS0GpfjuXp_Lx_Q", "stream-64.zeno.fm/80qzq207rm0uv?zs=_xFVUn2nS3qDiPZ-lCCmIQ", "stream-bg-01.radiotangra.com/Tangra-high.aac", "stream-bg-01.radiotangra.com:8000/Tangra-high", "stream-bg-01.radiotangra.com:8000/Tangra.ogg", "stream.bnr.bg:8035/radio-blagoevgrad.aac", "stream.bnr.bg:8036/radio-vidin.aac", "stream.bnr.bg:8037/radio-burgas.aac", "stream.bnr.bg:8038/radio-kardzhali.aac", "stream.metacast.eu/bgradio128", "stream.metacast.eu/nova.ogg", "stream.metacast.eu/radio1128", "stream.metacast.eu/radio1rock.ogg", "stream.metacast.eu/veronika.ogg", "stream.radioreklama.bg/bgradio.opus", "stream.radioreklama.bg/bgradio128", "stream.radioreklama.bg/novanews.aac", "stream.radioreklama.bg/nrj.opus", "stream.radioreklama.bg/radio164", "stream.sweetradio.online:8001/HD", "stream80.metacast.eu/avtoradiohi.aac", "streams.badrockradio.net/classic-rock", "whsh4u-panel.com/proxy/yfryujzw/stream", "whsh4u-panel.com:14113/stream", "www.katrafm.com:8000/live", "www.rnmediagroup.com:9000/", "www.rnmediagroup.com:9000/listen.pls", "www.ultranet.biz/ultrablagoevgrad.m3u", "www.ultranet.biz/vegasandanski.m3u", "xraydio.ddns.net/jukebox", "xraydio.ddns.net/live"]);
   const linkKey = (u) => (u || "").replace(/^https?:\/\//i, "");
   const EXTRA_RADIO = [
+    {
+      // Chaîne YouTube officielle de Planeta : écoutée comme une radio (le son continue en roulant).
+      id: "extra:planeta-radio", kind: "youtube", group: "Chalga & folk", logo: "",
+      name: "Planeta (son)",
+      url: "https://www.youtube.com/embed/videoseries?list=UUffdZGxiVRy3i9EaZF4m0wA&autoplay=1&playsinline=1",
+      open: "https://www.youtube.com/channel/UCffdZGxiVRy3i9EaZF4m0wA/videos"
+    },
     {
       id: "extra:veronika", kind: "radio", group: "Chalga & folk", logo: "",
       name: "Radio Veronika",
@@ -517,7 +538,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v23",
+    version: "v25",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -530,10 +551,10 @@
   const $ = (id) => document.getElementById(id);
 
   // Une seule fois : Fen TV et Radio Veronika arrivent dans les favoris.
-  if (!store.get("seededExtras3", false)) {
-    ["extra:njoy", "extra:darik", "extra:balkanika-radio"].forEach((id) => state.favorites.add(id));
+  if (!store.get("seededExtras4", false)) {
+    ["extra:njoy", "extra:darik", "extra:balkanika-radio", "extra:planeta-radio", "extra:planeta-live"].forEach((id) => state.favorites.add(id));
     store.set("favorites", [...state.favorites]);
-    store.set("seededExtras3", true);
+    store.set("seededExtras4", true);
   }
   if (!store.get("seededExtras", false)) {
     ["extra:fentv-clips", "extra:fentv-live", "extra:veronika"].forEach((id) => state.favorites.add(id));
@@ -602,6 +623,7 @@
     }, 250);
   }
   let hls = null;
+  let ts = null;
 
   // ---------- Chargement des chaînes ----------
 
@@ -674,6 +696,13 @@
         const res = await fetch(server + RADIO_QUERY, { signal: AbortSignal.timeout(12000) });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const stations = await res.json();
+        // Radio Payner / Planeta, parfois absentes du top des votes : recherche par nom.
+        for (const name of ["payner", "пайнер", "planeta", "планета"]) {
+          try {
+            const r2 = await fetch(server + "/json/stations/search?countrycode=BG&hidebroken=true&name=" + encodeURIComponent(name), { signal: AbortSignal.timeout(8000) });
+            if (r2.ok) stations.unshift(...(await r2.json()));
+          } catch {}
+        }
         if (!Array.isArray(stations) || !stations.length) throw new Error("liste vide");
         const list = dedupe(stations
           .filter((s) => s.url_resolved)
@@ -923,6 +952,7 @@
 
   function stopStream() {
     if (hls) { hls.destroy(); hls = null; }
+    if (ts) { try { ts.destroy(); } catch {} ts = null; }
     clearTimeout(state.stallTimer);
     for (const m of [video, leveled]) {
       m.pause();
@@ -957,7 +987,19 @@
     if (target !== media) { media.pause(); if (media.getAttribute("src")) { media.removeAttribute("src"); media.load(); } }
     media = target;
     if (media === leveled) startLeveling(c);
-    const isHls = /\.m3u8/i.test(decodeURIComponent(url)) || c.kind === "tv" || c.hls;
+    if (ts) { try { ts.destroy(); } catch {} ts = null; }
+    const plain = decodeURIComponent(url);
+    // Flux MPEG-TS bruts (passerelles IPTV en /play/…, fichiers .ts) : lus avec mpegts.js.
+    const isTs = !/\.m3u8/i.test(plain) && /\/play\/|\.ts(\?|$)|\/udp\/|\/rtp\//i.test(plain);
+    const isHls = !isTs && (/\.m3u8/i.test(plain) || c.kind === "tv" || c.hls);
+    if (isTs && window.mpegts && mpegts.isSupported()) {
+      ts = mpegts.createPlayer({ type: "mpegts", isLive: true, url }, { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false });
+      ts.on(mpegts.Events.ERROR, () => fail());
+      ts.attachMediaElement(media);
+      ts.load();
+      Promise.resolve(ts.play()).catch(() => {});
+      return;
+    }
     if (isHls && window.Hls && Hls.isSupported()) {
       hls = new Hls({ lowLatencyMode: false });
       hls.on(Hls.Events.ERROR, (_, data) => {
@@ -1180,7 +1222,7 @@
   }
 
   for (const m of [video, leveled]) {
-    m.addEventListener("error", () => { if (m === media && !hls && m.getAttribute("src") && state.fail) state.fail(); });
+    m.addEventListener("error", () => { if (m === media && !hls && !ts && m.getAttribute("src") && state.fail) state.fail(); });
     m.addEventListener("playing", () => {
       if (m !== media) return;
       clearTimeout(state.stallTimer);
@@ -1325,7 +1367,14 @@
       const t = setTimeout(() => end(false, "ne démarre pas"), ms);
       a.addEventListener("timeupdate", () => { if (a.currentTime > 0.3) end(true); });
       a.addEventListener("error", () => end(false, "flux illisible"));
-      if (isHls && window.Hls && Hls.isSupported()) {
+      const plain = decodeURIComponent(url);
+      if (!/\.m3u8/i.test(plain) && /\/play\/|\.ts(\?|$)|\/udp\/|\/rtp\//i.test(plain) && window.mpegts && mpegts.isSupported()) {
+        const p = mpegts.createPlayer({ type: "mpegts", isLive: true, url });
+        h = { destroy: () => { try { p.destroy(); } catch {} } };
+        p.on(mpegts.Events.ERROR, () => end(false, "flux TS en erreur"));
+        p.attachMediaElement(a);
+        p.load();
+      } else if (isHls && window.Hls && Hls.isSupported()) {
         h = new Hls();
         h.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) end(false, "flux HLS en erreur"); });
         h.loadSource(url);
@@ -1430,12 +1479,12 @@
   };
   $("miniPlay").onclick = () => {
     if (!state.current) return;
-    if (state.current.kind === "youtube" || (!media.getAttribute("src") && !hls)) play(state.current);
+    if (state.current.kind === "youtube" || (!media.getAttribute("src") && !hls && !ts)) play(state.current);
     else togglePlay();
   };
   $("miniOpen").onclick = () => {
     if (!state.current) return;
-    if (state.current.kind === "youtube" || (!media.getAttribute("src") && !hls)) play(state.current);
+    if (state.current.kind === "youtube" || (!media.getAttribute("src") && !hls && !ts)) play(state.current);
     else openPlayer();
   };
 
