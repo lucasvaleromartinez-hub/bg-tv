@@ -175,6 +175,8 @@
     padding: 24px;
   }
   .player.radio .radio-stage { display: grid; }
+  /* YouTube écouté comme une radio : la vidéo tourne mais reste invisible derrière l'écran radio. */
+  .player.audio-only #yt { position: absolute; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
   .radio-stage .wrap { display: grid; justify-items: center; gap: 22px; max-width: 900px; }
   .radio-stage .plate { width: min(320px, 56vw); height: min(220px, 38vw); border-radius: 26px; padding: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
   .radio-stage .big-song { font: 700 clamp(22px, 3.4vw, 40px)/1.2 var(--font-display); color: var(--text); text-wrap: balance; }
@@ -466,7 +468,7 @@
     {
       // Chaîne YouTube officielle de Planeta : écoutée comme une radio (le son continue en roulant).
       id: "extra:planeta-radio", kind: "youtube", group: "Chalga & folk", logo: "",
-      name: "Planeta (son)",
+      name: "Planeta (son)", audioOnly: true,
       url: "https://www.youtube.com/embed/videoseries?list=UUffdZGxiVRy3i9EaZF4m0wA&autoplay=1&playsinline=1",
       open: "https://www.youtube.com/channel/UCffdZGxiVRy3i9EaZF4m0wA/videos"
     },
@@ -538,7 +540,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v25",
+    version: "v26",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1282,9 +1284,11 @@
     setPlayIcon($("playBtn"));
     setPlayIcon($("miniPlay"));
     $("miniLive").hidden = !state.playing;
-    $("player").classList.toggle("radio", c.kind === "radio");
+    const asRadio = c.kind === "radio" || !!c.audioOnly;
+    $("player").classList.toggle("radio", asRadio);
+    $("player").classList.toggle("audio-only", !!c.audioOnly);
     $("player").classList.toggle("paused", !state.playing);
-    if (c.kind === "radio" && $("radioLogo").dataset.id !== c.id) {
+    if (asRadio && $("radioLogo").dataset.id !== c.id) {
       $("radioLogo").replaceWith(Object.assign(plate(c), { id: "radioLogo" }));
       $("radioLogo").dataset.id = c.id;
     }
