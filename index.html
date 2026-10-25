@@ -458,6 +458,32 @@
         "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_VERONIKAAAC_L.aac",
         "https://play.global.audio/veronika64"
       ]
+    },
+    {
+      // Même groupe que Veronika (bTV Radio), même hébergeur Triton.
+      id: "extra:njoy", kind: "radio", group: "Radios", logo: "",
+      name: "N-Joy",
+      triton: ["RADIO_NJOYAAC", "RADIO_NJOY", "NJOYAAC", "NJOY"],
+      url: "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_NJOYAAC_H.aac",
+      alts: [
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_NJOYAAC_L.aac",
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/NJOYAAC.aac",
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/NJOY.mp3",
+        "https://play.global.audio/njoy128",
+        "https://cdn.bweb.bg/radio/njoy.mp3"
+      ]
+    },
+    {
+      // Darik est diffusée par AzuraCast (asurahosting) : flux MP3, AAC et HLS.
+      id: "extra:darik", kind: "radio", group: "Radios", logo: "",
+      name: "Darik Radio",
+      azura: "https://a12.asurahosting.com/api/nowplaying/darik_radio",
+      url: "https://a12.asurahosting.com/listen/darik_radio/radio.mp3",
+      alts: [
+        "https://a12.asurahosting.com/hls/darik_radio/live.m3u8",
+        "https://a12.asurahosting.com/listen/darik_radio/radio.aac",
+        "https://a12.asurahosting.com/listen/darik_radio/mobile.mp3"
+      ]
     }
   ];
 
@@ -485,7 +511,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v20",
+    version: "v21",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -498,6 +524,11 @@
   const $ = (id) => document.getElementById(id);
 
   // Une seule fois : Fen TV et Radio Veronika arrivent dans les favoris.
+  if (!store.get("seededExtras2", false)) {
+    ["extra:njoy", "extra:darik"].forEach((id) => state.favorites.add(id));
+    store.set("favorites", [...state.favorites]);
+    store.set("seededExtras2", true);
+  }
   if (!store.get("seededExtras", false)) {
     ["extra:fentv-clips", "extra:fentv-live", "extra:veronika"].forEach((id) => state.favorites.add(id));
     store.set("favorites", [...state.favorites]);
@@ -983,6 +1014,13 @@
     const url = c.src || c.url;
     const attempts = [];
 
+    // 0. Radios AzuraCast (Darik) : l'API publique donne le titre en cours.
+    if (c.azura) attempts.push(async () => {
+      const r = await fetch(c.azura, { signal: AbortSignal.timeout(8000), cache: "no-store" });
+      if (!r.ok) return "";
+      const d = await r.json();
+      return d?.now_playing?.song?.text || "";
+    });
     // 1. Radios hébergées chez Triton (StreamTheWorld), comme Veronika, N-Joy ou Z-Rock.
     for (const mount of tritonMounts(c, url)) attempts.push(() => tritonTitle(mount, c.name));
     // 2. Serveurs Icecast : page d'état publique qui donne le titre de chaque flux.
