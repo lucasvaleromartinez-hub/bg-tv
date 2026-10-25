@@ -482,7 +482,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v17",
+    version: "v18",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -501,6 +501,66 @@
     store.set("seededExtras", true);
   }
   const video = $("video");
+  // Second lecteur, réservé aux radios qui passent par le relais : comme le relais autorise
+  // la lecture du son (CORS), on peut y brancher le réglage automatique du volume.
+  const leveled = new Audio();
+  leveled.crossOrigin = "anonymous";
+  leveled.preload = "auto";
+  let media = video;
+  const isRelayed = (u) => !!RELAY && typeof u === "string" && u.startsWith(RELAY);
+
+  // ---------- Volume égal entre les radios ----------
+  // Compresseur + gain ajusté en continu pour viser le même niveau sonore sur toutes les radios.
+  // Le réglage trouvé pour chaque radio est retenu : au prochain lancement, elle part au bon volume.
+  const level = { ctx: null, gain: null, analyser: null, timer: null, id: null, value: 1 };
+  const TARGET_RMS = 0.11;
+
+  function setupLeveling() {
+    if (level.ctx) return true;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = ctx.createMediaElementSource(leveled);
+      const gain = ctx.createGain();
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 3.5;
+      comp.attack.value = 0.01; comp.release.value = 0.4;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(gain).connect(comp).connect(ctx.destination);
+      gain.connect(analyser);
+      Object.assign(level, { ctx, gain, analyser });
+      return true;
+    } catch { return false; }
+  }
+
+  function startLeveling(c) {
+    if (!setupLeveling()) return;
+    level.ctx.resume().catch(() => {});
+    const gains = store.get("stationGain", {});
+    level.id = c.id;
+    level.value = gains[c.id] || 1;
+    level.gain.gain.setValueAtTime(level.value, level.ctx.currentTime);
+    clearInterval(level.timer);
+    const data = new Float32Array(level.analyser.fftSize);
+    let smooth = 0, saveIn = 20;
+    level.timer = setInterval(() => {
+      if (media !== leveled || leveled.paused) return;
+      level.analyser.getFloatTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+      // Niveau après gain : on remonte au niveau d'origine de la radio.
+      const rms = Math.sqrt(sum / data.length) / level.value;
+      if (rms < 0.004) return; // silence ou blanc entre deux titres : on ne touche à rien
+      smooth = smooth ? smooth * 0.9 + rms * 0.1 : rms;
+      const wanted = Math.min(4, Math.max(0.4, TARGET_RMS / smooth));
+      level.value += (wanted - level.value) * 0.15;
+      level.gain.gain.setTargetAtTime(level.value, level.ctx.currentTime, 0.5);
+      if (--saveIn <= 0) {
+        saveIn = 20;
+        store.set("stationGain", { ...store.get("stationGain", {}), [level.id]: Math.round(level.value * 100) / 100 });
+      }
+    }, 250);
+  }
   let hls = null;
 
   // ---------- Chargement des chaînes ----------
@@ -810,15 +870,17 @@
   function stopStream() {
     if (hls) { hls.destroy(); hls = null; }
     clearTimeout(state.stallTimer);
-    video.pause();
-    video.removeAttribute("src");
-    video.load(); // coupe vraiment l'ancien flux, sinon il continue de se télécharger en fond
+    for (const m of [video, leveled]) {
+      m.pause();
+      if (m.getAttribute("src")) { m.removeAttribute("src"); m.load(); } // coupe vraiment l'ancien flux
+    }
     if (yt.getAttribute("src")) yt.removeAttribute("src");
   }
 
   // Essaie le lien principal, puis les liens de secours de la chaîne.
   function startStream(c, attempt) {
-    const urls = [c.url, ...(c.alts || [])];
+    let urls = [c.url, ...(c.alts || [])];
+    if (c.kind === "radio" && RELAY) urls = [...new Set([relay(c.src || c.url), ...urls])];
     const url = urls[attempt];
     state.attempt = attempt;
     state.currentUrl = url;
@@ -836,6 +898,11 @@
     state.stallTimer = setTimeout(() => { if (!state.playing) fail(); }, c.kind === "radio" ? 8000 : 10000);
     if (c.kind === "radio" && attempt) setSongNote("Connexion via le lien de secours…");
     if (c.kind === "tv" && attempt) showLoading("Connexion via le lien de secours…");
+    // Radio via le relais → lecteur avec volume automatique ; sinon le lecteur normal.
+    const target = c.kind === "radio" && isRelayed(url) ? leveled : video;
+    if (target !== media) { media.pause(); if (media.getAttribute("src")) { media.removeAttribute("src"); media.load(); } }
+    media = target;
+    if (media === leveled) startLeveling(c);
     const isHls = /\.m3u8/i.test(decodeURIComponent(url)) || c.kind === "tv" || c.hls;
     if (isHls && window.Hls && Hls.isSupported()) {
       hls = new Hls({ lowLatencyMode: false });
@@ -845,18 +912,18 @@
         if (hls && data.type === Hls.ErrorTypes.NETWORK_ERROR && !hls._triedNative) {
           hls._triedNative = true;
           hls.destroy(); hls = null;
-          video.src = url;
-          video.play().catch(fail);
+          media.src = url;
+          media.play().catch(fail);
         } else {
           fail();
         }
       });
       hls.loadSource(url);
-      hls.attachMedia(video);
+      hls.attachMedia(media);
     } else {
-      video.src = url;
+      media.src = url;
     }
-    video.play().catch(() => {});
+    media.play().catch(() => {});
   }
 
   // ---------- Titre en cours (radios) ----------
@@ -1015,11 +1082,11 @@
   function togglePlay() {
     if (!state.current) return;
     if (state.current.kind === "youtube") return;
-    if (video.paused) {
+    if (media.paused) {
       // En direct : on relance le flux pour revenir au direct.
       play(state.current);
     } else {
-      video.pause();
+      media.pause();
     }
   }
 
@@ -1051,14 +1118,17 @@
     m.classList.add("show", "loading");
   }
 
-  video.addEventListener("error", () => { if (!hls && video.getAttribute("src") && state.fail) state.fail(); });
-  video.addEventListener("playing", () => {
-    clearTimeout(state.stallTimer);
-    hideMessage();
-    if (!state.song && /^Connexion/.test($("song").textContent)) $("song").hidden = true;
-    setPlaying(true);
-  });
-  video.addEventListener("pause", () => setPlaying(false));
+  for (const m of [video, leveled]) {
+    m.addEventListener("error", () => { if (m === media && !hls && m.getAttribute("src") && state.fail) state.fail(); });
+    m.addEventListener("playing", () => {
+      if (m !== media) return;
+      clearTimeout(state.stallTimer);
+      hideMessage();
+      if (!state.song && /^Connexion/.test($("song").textContent)) $("song").hidden = true;
+      setPlaying(true);
+    });
+    m.addEventListener("pause", () => { if (m === media) setPlaying(false); });
+  }
 
   function setPlaying(playing) {
     state.playing = playing;
@@ -1138,7 +1208,7 @@
     });
     const handlers = {
       play: togglePlay,
-      pause: () => video.pause(),
+      pause: () => media.pause(),
       nexttrack: () => zap(1),
       previoustrack: () => zap(-1)
     };
@@ -1299,12 +1369,12 @@
   };
   $("miniPlay").onclick = () => {
     if (!state.current) return;
-    if (state.current.kind === "youtube" || (!video.getAttribute("src") && !hls)) play(state.current);
+    if (state.current.kind === "youtube" || (!media.getAttribute("src") && !hls)) play(state.current);
     else togglePlay();
   };
   $("miniOpen").onclick = () => {
     if (!state.current) return;
-    if (state.current.kind === "youtube" || (!video.getAttribute("src") && !hls)) play(state.current);
+    if (state.current.kind === "youtube" || (!media.getAttribute("src") && !hls)) play(state.current);
     else openPlayer();
   };
 
