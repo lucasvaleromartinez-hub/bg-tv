@@ -22,6 +22,7 @@
     --radius: 18px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; height: 100%; }
   body {
     background: var(--bg);
@@ -102,6 +103,11 @@
   .ctrl { width: 72px; height: 72px; border-radius: 50%; background: var(--panel-2); font-size: 30px; display: grid; place-items: center; }
   .ctrl.big { width: 84px; height: 84px; background: var(--accent); color: #fff; font-size: 34px; }
   .ctrl.star { color: var(--star); }
+  .yt-open {
+    position: absolute; top: 16px; right: 16px;
+    padding: 14px 22px; border-radius: 999px;
+    background: #ff0033; color: #fff; font-weight: 800; text-decoration: none; font-size: 18px;
+  }
   .message {
     position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
     max-width: 80%; padding: 18px 24px; border-radius: var(--radius);
@@ -143,6 +149,7 @@
     .bar .info { width: 100%; margin: 0; text-align: center; }
     .ctrl { width: 60px; height: 60px; }
     .ctrl.big { width: 72px; height: 72px; }
+    .yt-open { left: 16px; right: 16px; text-align: center; font-size: 16px; }
   }
 </style>
 </head>
@@ -168,7 +175,8 @@
 
 <section class="player" id="player" aria-label="Lecteur">
   <video id="video" playsinline></video>
-  <iframe id="yt" hidden allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="YouTube"></iframe>
+  <iframe id="yt" hidden allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="YouTube"></iframe>
+  <a class="yt-open" id="ytOpen" hidden target="_blank" rel="noopener">Rien ne s'affiche ? Ouvrir dans YouTube ↗</a>
   <div class="radio-art" id="radioArt"></div>
   <div class="message" id="message"></div>
   <div class="bar">
@@ -212,12 +220,14 @@
     {
       id: "extra:fentv-live", kind: "youtube", group: "Musique", logo: "",
       name: "Fen TV · direct",
-      url: "https://www.youtube.com/embed/live_stream?channel=UCxeMrViqXdLty51nKv3x-bQ&autoplay=1"
+      url: "https://www.youtube.com/embed/live_stream?channel=UCxeMrViqXdLty51nKv3x-bQ&autoplay=1&playsinline=1",
+      open: "https://www.youtube.com/@fentvbg/live"
     },
     {
       id: "extra:fentv-clips", kind: "youtube", group: "Musique", logo: "",
       name: "Fen TV · clips",
-      url: "https://www.youtube.com/embed/videoseries?list=UUxeMrViqXdLty51nKv3x-bQ&autoplay=1"
+      url: "https://www.youtube.com/embed/videoseries?list=UUxeMrViqXdLty51nKv3x-bQ&autoplay=1&playsinline=1",
+      open: "https://www.youtube.com/@fentvbg/videos"
     }
   ];
   const EXTRA_RADIO = [
@@ -257,7 +267,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v6",
+    version: "v7",
     song: "",
     customLists: store.get("customLists", []),
     current: null,
@@ -492,10 +502,12 @@
     hideMessage();
     stopStream();
 
+    $("ytOpen").hidden = c.kind !== "youtube";
     if (c.kind === "youtube") {
       video.hidden = true;
       yt.hidden = false;
-      yt.src = c.url;
+      yt.src = c.url + (location.protocol === "https:" ? "&origin=" + encodeURIComponent(location.origin) : "");
+      $("ytOpen").href = c.open || c.url;
     } else {
       yt.hidden = true;
       video.hidden = false;
