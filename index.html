@@ -98,6 +98,7 @@
   .song { color: var(--star); font-weight: 700; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mini .text { margin-right: auto; min-width: 0; display: flex; flex-direction: column; }
   .mini .song { font-size: 15px; }
+  .song.muted { color: var(--muted); font-weight: 400; font-size: 15px; }
   .ctrl { width: 72px; height: 72px; border-radius: 50%; background: var(--panel-2); font-size: 30px; display: grid; place-items: center; }
   .ctrl.big { width: 84px; height: 84px; background: var(--accent); color: #fff; font-size: 34px; }
   .ctrl.star { color: var(--star); }
@@ -256,7 +257,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v5",
+    version: "v6",
     song: "",
     customLists: store.get("customLists", []),
     current: null,
@@ -559,10 +560,14 @@
   function startNowPlaying(c) {
     stopNowPlaying();
     if (c.kind !== "radio") return;
+    let tries = 0;
     const tick = async () => {
       let title = "";
       try { title = await fetchSongTitle(c); } catch {}
-      if (state.current === c) setSong(title);
+      if (state.current !== c) return;
+      tries++;
+      if (title) setSong(title);
+      else if (tries >= 2 && !state.song) setSongNote("Cette radio ne publie pas le titre en cours");
     };
     setTimeout(tick, 1500);
     nowPlaying.timer = setInterval(tick, 20000);
@@ -574,37 +579,89 @@
     setSong("");
   }
 
+  function setSongNote(note) {
+    $("song").textContent = note;
+    $("song").classList.add("muted");
+    $("song").hidden = false;
+  }
+
   function setSong(title) {
     title = (title || "").trim();
-    if (title === state.song) return;
+    const changed = title !== state.song;
     state.song = title;
+    $("song").classList.remove("muted");
     for (const id of ["song", "miniSong"]) {
       $(id).textContent = title ? "♪ " + title : "";
       $(id).hidden = !title;
     }
-    updateMediaSession();
+    if (changed) updateMediaSession();
   }
 
   async function fetchSongTitle(c) {
-    // Radios hébergées chez Triton (StreamTheWorld) : elles publient leur titre en cours.
-    const mounts = [...(c.triton || [])];
-    const m = (state.currentUrl || c.url).match(/livestream-redirect\/([A-Z0-9_]+?)(?:_[HL])?\.(?:aac|mp3)/i);
-    if (m) mounts.push(m[1], m[1].replace(/AAC$/i, ""));
-    for (const mount of [...new Set(mounts)]) {
-      const title = await tritonTitle(mount).catch(() => "");
+    const url = state.currentUrl || c.url;
+    const attempts = [];
+
+    // 1. Radios hébergées chez Triton (StreamTheWorld), comme Veronika, N-Joy ou Z-Rock.
+    for (const mount of tritonMounts(c, url)) attempts.push(() => tritonTitle(mount, c.name));
+    // 2. Serveurs Icecast : page d'état publique qui donne le titre de chaque flux.
+    attempts.push(() => icecastTitle(url));
+    // 3. Serveurs Shoutcast.
+    attempts.push(() => shoutcastTitle(url));
+    // 4. Titre glissé dans le flux audio lui-même.
+    attempts.push(() => icyTitle(url));
+
+    for (const attempt of attempts) {
+      const title = await attempt().catch(() => "");
       if (title) return title;
     }
-    // Les autres radios glissent le titre dans le flux audio (métadonnées « ICY »).
-    return icyTitle(state.currentUrl || c.url);
+    return "";
   }
 
-  async function tritonTitle(mount) {
+  function tritonMounts(c, url) {
+    const mounts = [...(c.triton || [])];
+    if (/streamtheworld\.com/i.test(url)) {
+      const last = decodeURIComponent(new URL(url).pathname.split("/").pop() || "")
+        .replace(/\.(aac|mp3|m3u8|pls)$/i, "").replace(/_SC$/i, "");
+      if (last) mounts.push(last, last.replace(/_[HL]$/i, ""), last.replace(/_[HL]$/i, "").replace(/AAC$/i, ""));
+    }
+    return [...new Set(mounts)];
+  }
+
+  async function tritonTitle(mount, stationName) {
     const res = await fetch("https://np.tritondigital.com/public/nowplaying?mountName=" + encodeURIComponent(mount)
       + "&numberToFetch=1&eventType=track", { signal: AbortSignal.timeout(8000), cache: "no-store" });
     if (!res.ok) return "";
-    const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+    const text = (await res.text()).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, (_, v) =>
+      v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+    const xml = new DOMParser().parseFromString(text, "text/xml");
     const prop = (name) => (xml.querySelector(`property[name="${name}"]`)?.textContent || "").trim();
-    return [prop("track_artist_name"), prop("cue_title")].filter(Boolean).join(" – ");
+    const title = prop("cue_title"), artist = prop("track_artist_name");
+    if (!title || /^\d{1,2}:\d{2}$/.test(title)) return "";
+    if (!artist && title.toLowerCase() === stationName.toLowerCase()) return "";
+    return [artist, title].filter(Boolean).join(" – ");
+  }
+
+  async function icecastTitle(url) {
+    const u = new URL(url);
+    const res = await fetch(u.origin + "/status-json.xsl", { signal: AbortSignal.timeout(8000), cache: "no-store" });
+    if (!res.ok) return "";
+    const data = await res.json();
+    let sources = data?.icestats?.source;
+    if (!sources) return "";
+    if (!Array.isArray(sources)) sources = [sources];
+    const source = sources.find((x) => x.listenurl && new URL(x.listenurl, u.origin).pathname === u.pathname)
+      || (sources.length === 1 ? sources[0] : null);
+    if (!source) return "";
+    const title = source.title || "";
+    return source.artist && !title.includes(source.artist) ? `${source.artist} – ${title}` : title;
+  }
+
+  async function shoutcastTitle(url) {
+    const u = new URL(url);
+    const res = await fetch(u.origin + "/stats?sid=1&json=1", { signal: AbortSignal.timeout(8000), cache: "no-store" });
+    if (!res.ok) return "";
+    const data = await res.json();
+    return data.songtitle || "";
   }
 
   async function icyTitle(url) {
