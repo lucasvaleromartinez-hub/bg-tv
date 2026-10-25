@@ -95,6 +95,9 @@
   .bar .info { margin-right: auto; min-width: 0; }
   .bar .title { font-size: 24px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar .sub { color: var(--muted); }
+  .song { color: var(--star); font-weight: 700; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini .text { margin-right: auto; min-width: 0; display: flex; flex-direction: column; }
+  .mini .song { font-size: 15px; }
   .ctrl { width: 72px; height: 72px; border-radius: 50%; background: var(--panel-2); font-size: 30px; display: grid; place-items: center; }
   .ctrl.big { width: 84px; height: 84px; background: var(--accent); color: #fff; font-size: 34px; }
   .ctrl.star { color: var(--star); }
@@ -113,7 +116,7 @@
     background: var(--panel-2); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.5);
   }
   .mini.show { display: flex; }
-  .mini .title { font-weight: 800; margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini .title { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mini .ctrl { width: 60px; height: 60px; font-size: 24px; }
 
   /* Réglages */
@@ -157,7 +160,7 @@
 <main id="list"><p class="status">Chargement des chaînes…</p></main>
 
 <div class="mini" id="mini">
-  <span class="title" id="miniTitle"></span>
+  <span class="text"><span class="title" id="miniTitle"></span><span class="song" id="miniSong" hidden></span></span>
   <button class="ctrl" id="miniPlay" aria-label="Lecture / pause">⏸</button>
   <button class="ctrl" id="miniOpen" aria-label="Ouvrir le lecteur">⤢</button>
 </div>
@@ -171,6 +174,7 @@
     <button class="ctrl" id="closeBtn" aria-label="Retour à la liste">⌄</button>
     <div class="info">
       <div class="title" id="title"></div>
+      <div class="song" id="song" hidden></div>
       <div class="sub" id="sub"></div>
     </div>
     <button class="ctrl star" id="favBtn" aria-label="Favori">☆</button>
@@ -219,6 +223,7 @@
     {
       id: "extra:veronika", kind: "radio", group: "Chalga & folk", logo: "",
       name: "Radio Veronika",
+      triton: ["RADIO_VERONIKAAAC", "RADIO_VERONIKA"],
       url: "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_VERONIKAAAC_H.aac",
       alts: [
         "https://playerservices.streamtheworld.com/api/livestream-redirect/RADIO_VERONIKAAAC_L.aac",
@@ -251,7 +256,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v4",
+    version: "v5",
+    song: "",
     customLists: store.get("customLists", []),
     current: null,
     queue: [],
@@ -494,6 +500,7 @@
       video.hidden = false;
       startStream(c, 0);
     }
+    startNowPlaying(c);
 
     openPlayer();
     updatePlayer();
@@ -513,6 +520,7 @@
     const urls = [c.url, ...(c.alts || [])];
     const url = urls[attempt];
     state.attempt = attempt;
+    state.currentUrl = url;
     const fail = () => {
       if (state.current !== c || state.attempt !== attempt) return;
       if (attempt + 1 < urls.length) startStream(c, attempt + 1);
@@ -542,6 +550,101 @@
       video.src = url;
     }
     video.play().catch(() => {});
+  }
+
+  // ---------- Titre en cours (radios) ----------
+
+  const nowPlaying = { timer: null, ctrl: null };
+
+  function startNowPlaying(c) {
+    stopNowPlaying();
+    if (c.kind !== "radio") return;
+    const tick = async () => {
+      let title = "";
+      try { title = await fetchSongTitle(c); } catch {}
+      if (state.current === c) setSong(title);
+    };
+    setTimeout(tick, 1500);
+    nowPlaying.timer = setInterval(tick, 20000);
+  }
+
+  function stopNowPlaying() {
+    clearInterval(nowPlaying.timer);
+    if (nowPlaying.ctrl) nowPlaying.ctrl.abort();
+    setSong("");
+  }
+
+  function setSong(title) {
+    title = (title || "").trim();
+    if (title === state.song) return;
+    state.song = title;
+    for (const id of ["song", "miniSong"]) {
+      $(id).textContent = title ? "♪ " + title : "";
+      $(id).hidden = !title;
+    }
+    updateMediaSession();
+  }
+
+  async function fetchSongTitle(c) {
+    // Radios hébergées chez Triton (StreamTheWorld) : elles publient leur titre en cours.
+    const mounts = [...(c.triton || [])];
+    const m = (state.currentUrl || c.url).match(/livestream-redirect\/([A-Z0-9_]+?)(?:_[HL])?\.(?:aac|mp3)/i);
+    if (m) mounts.push(m[1], m[1].replace(/AAC$/i, ""));
+    for (const mount of [...new Set(mounts)]) {
+      const title = await tritonTitle(mount).catch(() => "");
+      if (title) return title;
+    }
+    // Les autres radios glissent le titre dans le flux audio (métadonnées « ICY »).
+    return icyTitle(state.currentUrl || c.url);
+  }
+
+  async function tritonTitle(mount) {
+    const res = await fetch("https://np.tritondigital.com/public/nowplaying?mountName=" + encodeURIComponent(mount)
+      + "&numberToFetch=1&eventType=track", { signal: AbortSignal.timeout(8000), cache: "no-store" });
+    if (!res.ok) return "";
+    const xml = new DOMParser().parseFromString(await res.text(), "text/xml");
+    const prop = (name) => (xml.querySelector(`property[name="${name}"]`)?.textContent || "").trim();
+    return [prop("track_artist_name"), prop("cue_title")].filter(Boolean).join(" – ");
+  }
+
+  async function icyTitle(url) {
+    const ctrl = new AbortController();
+    nowPlaying.ctrl = ctrl;
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch(url, { headers: { "Icy-MetaData": "1" }, signal: ctrl.signal, cache: "no-store" });
+      const metaint = parseInt(res.headers.get("icy-metaint"), 10);
+      if (!metaint || !res.body) return "";
+      const reader = res.body.getReader();
+      let buf = new Uint8Array(0);
+      while (buf.length < metaint + 4081) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const next = new Uint8Array(buf.length + value.length);
+        next.set(buf);
+        next.set(value, buf.length);
+        buf = next;
+        if (buf.length > metaint) {
+          const len = buf[metaint] * 16;
+          if (len === 0) return "";
+          if (buf.length >= metaint + 1 + len) {
+            const text = decodeMeta(buf.slice(metaint + 1, metaint + 1 + len));
+            const found = text.match(/StreamTitle='(.*?)';/);
+            return found ? found[1] : "";
+          }
+        }
+      }
+      return "";
+    } finally {
+      clearTimeout(timer);
+      ctrl.abort();
+    }
+  }
+
+  // Beaucoup de radios bulgares écrivent le titre en windows-1251 plutôt qu'en UTF-8.
+  function decodeMeta(bytes) {
+    try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+    catch { return new TextDecoder("windows-1251").decode(bytes); }
   }
 
   function togglePlay() {
@@ -629,8 +732,8 @@
     if (!("mediaSession" in navigator) || !state.current) return;
     const c = state.current;
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: c.name,
-      artist: "BG TV · en direct",
+      title: state.song || c.name,
+      artist: state.song ? c.name : "BG TV · en direct",
       artwork: c.logo ? [{ src: c.logo, sizes: "512x512" }] : []
     });
     const handlers = {
