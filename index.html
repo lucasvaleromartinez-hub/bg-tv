@@ -545,7 +545,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v28",
+    version: "v29",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -711,6 +711,17 @@
           } catch {}
         }
         if (!Array.isArray(stations) || !stations.length) throw new Error("liste vide");
+        // Radios musicales d'Israël (sans info, débats, sport ni religion).
+        try {
+          const r3 = await fetch(server + "/json/stations/search?countrycode=IL&hidebroken=true&order=votes&reverse=true&limit=150", { signal: AbortSignal.timeout(10000) });
+          if (r3.ok) {
+            const talk = /news|talk|sport|religio|torah|chabad|jewish|haredi|politic|education|חדשות|תורה|דתי|ספורט/i;
+            const music = /music|pop|hit|rock|dance|mizrahi|oriental|mediterr|hebrew|israeli music|jazz|electro|house|trance|80|90|oldies|chill|lounge|r&b|hip|מוזיקה|מזרחי|ים תיכוני/i;
+            stations.push(...(await r3.json())
+              .filter((x) => !talk.test(x.tags + " " + x.name) && music.test(x.tags + " " + x.name))
+              .map((x) => ({ ...x, _il: true })));
+          }
+        } catch {}
         const list = dedupe(stations
           .filter((s) => s.url_resolved)
           .filter((s) => !DEAD_RADIOS.has(linkKey(s.url_resolved)) && !DEAD_RADIOS.has(linkKey(s.url)))
@@ -720,7 +731,9 @@
               id: s.url_resolved, src: s.url_resolved, url: urls[0], alts: urls.slice(1),
               kind: "radio", hls: s.hls === 1,
               name: s.name.trim(), logo: s.favicon || "",
-              group: /chalga|чалга|folk|фолк/i.test(s.tags) ? "Chalga & folk" : "Radios"
+              group: s._il
+                ? (/mizrahi|oriental|mediterr|מזרחי|ים תיכוני/i.test(s.tags + " " + s.name) ? "Israël · Mizrahi" : "Israël")
+                : /chalga|чалга|folk|фолк/i.test(s.tags) ? "Chalga & folk" : "Radios"
             };
           }));
         state.radio = [...EXTRA_RADIO, ...list];
