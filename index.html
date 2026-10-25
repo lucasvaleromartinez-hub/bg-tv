@@ -4,199 +4,344 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>BG TV</title>
-<meta name="theme-color" content="#0d0f14">
+<meta name="theme-color" content="#0b0e14">
 <meta http-equiv="Cache-Control" content="no-cache">
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&display=swap">
 <style>
+  /* Tableau de bord de voiture : rail de navigation à gauche (en bas sur téléphone),
+     plaques de logos claires, numéros de chaîne, jaune « Pop » de la R5 comme seul accent. */
   :root {
-    --bg: #0d0f14;
-    --panel: #171a22;
-    --panel-2: #222633;
-    --text: #f3f4f7;
-    --muted: #9aa1b2;
-    --accent: #00966e;
-    --accent-2: #d62612;
-    --star: #ffc93c;
-    --radius: 18px;
+    --ink: #0b0e14;
+    --deck: #141922;
+    --deck-2: #1c2330;
+    --line: #283041;
+    --text: #eef1f6;
+    --muted: #8d96a9;
+    --signal: #ffc23d;
+    --signal-ink: #1d1600;
+    --live: #ff4d4d;
+    --plate: #f4f5f7;
+    --bg-white: #ffffff;
+    --bg-green: #00966e;
+    --bg-red: #d62612;
+
+    --font-display: "Unbounded", "Manrope", system-ui, sans-serif;
+    --font-body: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    --r-lg: 22px;
+    --r-md: 16px;
+    --rail: 112px;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   [hidden] { display: none !important; }
-  html, body { margin: 0; height: 100%; }
+  html, body { margin: 0; min-height: 100%; }
   body {
-    background: var(--bg);
+    background: var(--ink);
     color: var(--text);
-    font: 18px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: 500 18px/1.35 var(--font-body);
     overflow-x: hidden;
   }
-  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  button, input { font: inherit; color: inherit; }
+  button { border: 0; background: none; cursor: pointer; padding: 0; }
+  button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+  svg { display: block; }
+  .ic { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ic.fill { fill: currentColor; stroke: none; }
 
-  header {
-    position: sticky; top: 0; z-index: 5;
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 14px 20px;
-    background: rgba(13, 15, 20, .94);
-    backdrop-filter: blur(10px);
+  /* ---------- Rail de navigation ---------- */
+  .rail {
+    position: fixed; z-index: 15; left: 0; top: 0; bottom: 0; width: var(--rail);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: max(18px, env(safe-area-inset-top, 0px)) 0 18px max(0px, env(safe-area-inset-left, 0px));
+    background: var(--deck); border-right: 1px solid var(--line);
   }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 26px; margin-right: auto; }
-  .flag { width: 34px; height: 24px; border-radius: 4px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr 1fr; }
-  .flag i:nth-child(1) { background: #fff; } .flag i:nth-child(2) { background: var(--accent); } .flag i:nth-child(3) { background: var(--accent-2); }
+  .mark { display: grid; justify-items: center; gap: 6px; margin-bottom: 18px; }
+  .flag { width: 40px; height: 28px; border-radius: 6px; overflow: hidden; display: grid; grid-template-rows: 1fr 1fr 1fr; }
+  .flag i:nth-child(1) { background: var(--bg-white); }
+  .flag i:nth-child(2) { background: var(--bg-green); }
+  .flag i:nth-child(3) { background: var(--bg-red); }
+  .mark b { font: 700 15px/1 var(--font-display); letter-spacing: .04em; }
+  .nav {
+    width: 88px; min-height: 76px; border-radius: var(--r-md);
+    display: grid; justify-items: center; align-content: center; gap: 6px;
+    color: var(--muted); font-weight: 700; font-size: 14px;
+  }
+  .nav[aria-selected="true"] { background: var(--deck-2); color: var(--signal); }
+  .rail .spacer { flex: 1; }
 
-  .tabs { display: flex; gap: 8px; background: var(--panel); padding: 6px; border-radius: 999px; }
-  .tab { padding: 12px 22px; border-radius: 999px; font-weight: 700; color: var(--muted); min-height: 52px; }
-  .tab[aria-selected="true"] { background: var(--accent); color: #fff; }
-
+  /* ---------- Contenu ---------- */
+  main {
+    margin-left: var(--rail);
+    padding-block: max(22px, env(safe-area-inset-top, 0px)) 150px;
+    padding-left: 28px;
+    padding-right: max(28px, env(safe-area-inset-right, 0px));
+  }
+  .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  .top h1 { margin: 0 auto 0 0; font: 700 30px/1.1 var(--font-display); letter-spacing: -.01em; }
   .search {
-    flex: 1 1 220px; max-width: 340px; min-height: 52px;
-    padding: 0 18px; border-radius: 999px; border: 0;
-    background: var(--panel); color: var(--text); font: inherit;
+    display: flex; align-items: center; gap: 10px; flex: 0 1 360px; min-width: 0;
+    min-height: 56px; padding: 0 18px; border-radius: 999px; background: var(--deck); border: 1px solid var(--line);
+    color: var(--muted);
   }
-  .icon-btn { width: 52px; height: 52px; border-radius: 50%; background: var(--panel); display: grid; place-items: center; font-size: 24px; }
+  .search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; color: var(--text); font-weight: 600; }
+  .search input::placeholder { color: var(--muted); }
 
-  main { padding: 6px 20px 120px; }
-  .status { color: var(--muted); padding: 30px 0; text-align: center; font-size: 20px; }
-  h2 { margin: 26px 0 12px; font-size: 22px; color: var(--muted); font-weight: 700; }
+  /* Carte « Reprendre » */
+  .resume {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 22px;
+    padding: 20px 22px; margin-bottom: 30px; border-radius: var(--r-lg);
+    background: linear-gradient(120deg, var(--deck-2), var(--deck) 70%);
+    border: 1px solid var(--line);
+  }
+  .resume .plate { width: 132px; height: 92px; }
+  .resume .eyebrow { color: var(--muted); font-size: 13px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .resume .name { font: 700 26px/1.15 var(--font-display); margin: 6px 0 4px; overflow-wrap: anywhere; }
+  .resume .song { font-size: 18px; }
+  .resume .go {
+    width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--signal); color: var(--signal-ink);
+  }
+  .resume .go .ic { width: 34px; height: 34px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+  .section-head { display: flex; align-items: baseline; gap: 12px; margin: 30px 0 14px; }
+  .section-head h2 { margin: 0; font: 700 19px/1.2 var(--font-display); }
+  .section-head span { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 16px; }
   .tile {
-    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-    min-height: 150px; padding: 16px 10px 14px;
-    background: var(--panel); border-radius: var(--radius); text-align: center;
-    transition: transform .12s, background .12s;
+    position: relative; display: flex; flex-direction: column; gap: 12px; text-align: left;
+    padding: 12px 12px 14px; border-radius: var(--r-lg);
+    background: var(--deck); border: 1px solid var(--line);
+    transition: transform .12s ease, border-color .12s ease, background .12s ease;
   }
-  .tile:active { transform: scale(.96); background: var(--panel-2); }
-  .tile.playing { outline: 3px solid var(--accent); }
-  .logo { width: 100%; height: 72px; display: grid; place-items: center; }
-  .logo img { max-width: 120px; max-height: 72px; object-fit: contain; }
-  .logo .fallback {
-    width: 72px; height: 72px; border-radius: 16px; display: grid; place-items: center;
-    background: var(--panel-2); font-weight: 800; font-size: 26px; color: var(--muted);
+  .tile:active { transform: scale(.97); background: var(--deck-2); }
+  .tile.playing { border-color: var(--signal); box-shadow: 0 0 0 1px var(--signal) inset; }
+  .plate {
+    height: 104px; border-radius: 14px; background: var(--plate);
+    display: grid; place-items: center; overflow: hidden; padding: 12px;
   }
-  .tile .name { font-weight: 700; font-size: 17px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .tile .fav { position: absolute; top: 8px; right: 10px; color: var(--star); font-size: 20px; }
+  .plate img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .plate .initials { font: 700 30px/1 var(--font-display); color: #3a4256; }
+  .tile .name { font-weight: 800; font-size: 17px; line-height: 1.25; padding: 0 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .meta { display: flex; align-items: center; gap: 8px; padding: 0 4px; color: var(--muted); font-size: 13px; font-weight: 700; }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+  .badge { padding: 3px 8px; border-radius: 999px; background: var(--deck-2); letter-spacing: .04em; }
+  .badge.yt { color: #ff5c6c; }
+  .tile .star { position: absolute; top: 18px; right: 18px; color: var(--signal); filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); }
+  .tile .star .ic { width: 22px; height: 22px; }
 
-  /* Lecteur */
-  .player {
-    position: fixed; inset: 0; z-index: 20; background: #000;
-    display: none; flex-direction: column;
-  }
-  .player.open { display: flex; }
-  .player video, .player iframe { flex: 1; width: 100%; min-height: 0; background: #000; border: 0; }
-  .radio-art {
-    position: absolute; inset: 0 0 110px; display: none; place-items: center; pointer-events: none;
-  }
-  .player.radio .radio-art { display: grid; }
-  .radio-art img { max-width: 40vmin; max-height: 40vmin; border-radius: 24px; background: #fff; padding: 12px; }
-  .radio-art .fallback { width: 30vmin; height: 30vmin; border-radius: 24px; background: var(--panel); display: grid; place-items: center; font-size: 12vmin; font-weight: 800; color: var(--muted); }
-  .bar {
-    display: flex; align-items: center; gap: 14px; padding: 14px 20px;
-    background: var(--panel); min-height: 110px;
-  }
-  .bar .info { margin-right: auto; min-width: 0; }
-  .bar .title { font-size: 24px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bar .sub { color: var(--muted); }
-  .song { color: var(--star); font-weight: 700; font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mini .text { margin-right: auto; min-width: 0; display: flex; flex-direction: column; }
-  .mini .song { font-size: 15px; }
-  .song.muted { color: var(--muted); font-weight: 400; font-size: 15px; }
-  .ctrl { width: 72px; height: 72px; border-radius: 50%; background: var(--panel-2); font-size: 30px; display: grid; place-items: center; }
-  .ctrl.big { width: 84px; height: 84px; background: var(--accent); color: #fff; font-size: 34px; }
-  .ctrl.star { color: var(--star); }
-  .yt-open {
-    position: absolute; top: 16px; right: 16px;
-    padding: 14px 22px; border-radius: 999px;
-    background: #ff0033; color: #fff; font-weight: 800; text-decoration: none; font-size: 18px;
-  }
-  .message {
-    position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%);
-    max-width: 80%; padding: 18px 24px; border-radius: var(--radius);
-    background: rgba(23, 26, 34, .95); text-align: center; font-size: 20px; display: none;
-  }
-  .message.show { display: block; }
-  .message button { margin-top: 14px; padding: 14px 24px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; }
+  .empty { color: var(--muted); padding: 40px 0; font-size: 19px; }
+  .skeleton { height: 178px; border-radius: var(--r-lg); background: linear-gradient(100deg, var(--deck) 30%, var(--deck-2) 50%, var(--deck) 70%); background-size: 300% 100%; animation: shimmer 1.4s infinite linear; }
+  @keyframes shimmer { to { background-position: -150% 0; } }
+  .foot { margin-top: 40px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 
-  /* Mini lecteur */
+  /* ---------- Mini-lecteur ---------- */
   .mini {
-    position: fixed; left: 20px; right: 20px; bottom: 16px; z-index: 10;
-    display: none; align-items: center; gap: 14px; padding: 12px 16px;
-    background: var(--panel-2); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.5);
+    position: fixed; z-index: 14; left: calc(var(--rail) + 20px); right: max(20px, env(safe-area-inset-right, 0px)); bottom: max(18px, env(safe-area-inset-bottom, 0px));
+    display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 10px;
+    background: rgba(28, 35, 48, .92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: 0 14px 40px rgba(0,0,0,.45);
   }
-  .mini.show { display: flex; }
+  .mini .plate { width: 84px; height: 58px; padding: 6px; border-radius: 12px; }
+  .mini .text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left; }
   .mini .title { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mini .ctrl { width: 60px; height: 60px; font-size: 24px; }
+  .round { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; background: var(--deck-2); flex: none; }
+  .round.main { background: var(--signal); color: var(--signal-ink); }
 
-  /* Réglages */
-  dialog { background: var(--panel); color: var(--text); border: 0; border-radius: var(--radius); width: min(560px, 92vw); padding: 24px; }
-  dialog::backdrop { background: rgba(0,0,0,.6); }
-  dialog input { width: 100%; min-height: 52px; margin: 8px 0; padding: 0 14px; border-radius: 12px; border: 0; background: var(--panel-2); color: var(--text); font: inherit; }
-  dialog .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
-  dialog .row button { padding: 14px 22px; border-radius: 999px; background: var(--panel-2); font-weight: 700; }
-  dialog .row button.primary { background: var(--accent); color: #fff; }
-  .lists { list-style: none; padding: 0; margin: 10px 0; }
-  .lists li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--panel-2); word-break: break-all; }
-  .lists li span { margin-right: auto; }
+  .song { color: var(--signal); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song.muted { color: var(--muted); font-weight: 600; }
+  .onair { display: inline-flex; align-items: center; gap: 8px; color: var(--live); font-size: 13px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+  .onair::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 rgba(255,77,77,.6); animation: pulse 1.8s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 10px rgba(255,77,77,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,77,0); } }
+
+  /* ---------- Lecteur plein écran ---------- */
+  .player { position: fixed; inset: 0; z-index: 30; background: #000; display: none; flex-direction: column; }
+  .player.open { display: flex; }
+  .stage { position: relative; flex: 1; min-height: 0; display: flex; }
+  .stage video, .stage iframe { flex: 1; width: 100%; min-height: 0; background: #000; border: 0; }
+  .radio-stage {
+    position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+    background: radial-gradient(60% 70% at 50% 40%, #1d2534, var(--ink));
+    padding: 24px;
+  }
+  .player.radio .radio-stage { display: grid; }
+  .radio-stage .wrap { display: grid; justify-items: center; gap: 22px; max-width: 900px; }
+  .radio-stage .plate { width: min(320px, 56vw); height: min(220px, 38vw); border-radius: 26px; padding: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .radio-stage .big-song { font: 700 clamp(22px, 3.4vw, 40px)/1.2 var(--font-display); color: var(--text); text-wrap: balance; }
+  .eq { display: flex; align-items: flex-end; gap: 6px; height: 34px; }
+  .eq i { width: 7px; height: 100%; border-radius: 4px; background: var(--signal); transform-origin: bottom; animation: eq 1s ease-in-out infinite; }
+  .eq i:nth-child(2) { animation-delay: -.3s; } .eq i:nth-child(3) { animation-delay: -.6s; } .eq i:nth-child(4) { animation-delay: -.15s; } .eq i:nth-child(5) { animation-delay: -.45s; }
+  .player.paused .eq i { animation-play-state: paused; }
+  @keyframes eq { 0%, 100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+
+  .dock {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 16px max(22px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(22px, env(safe-area-inset-left, 0px));
+    background: var(--deck); border-top: 1px solid var(--line);
+  }
+  .dock .info { flex: 1; min-width: 0; display: grid; gap: 4px; }
+  .dock .title { font: 700 24px/1.15 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dock .sub { color: var(--muted); font-size: 15px; font-weight: 600; }
+  .dock .round { width: 70px; height: 70px; }
+  .dock .round.main { width: 84px; height: 84px; }
+  .dock .round.main .ic { width: 34px; height: 34px; }
+  .dock .round.fav[aria-pressed="true"] { color: var(--signal); }
+  .dock .round.fav[aria-pressed="true"] .ic { fill: currentColor; }
+  .controls { display: flex; align-items: center; gap: 12px; }
+
+  .yt-open {
+    position: absolute; top: max(16px, env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 22px; border-radius: 999px; background: #ff0033; color: #fff; font-weight: 800; text-decoration: none; font-size: 17px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  }
+  .yt-open .ic { width: 20px; height: 20px; }
+  .message {
+    position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
+    width: min(560px, calc(100% - 32px)); padding: 22px 24px; border-radius: var(--r-lg);
+    background: rgba(20, 25, 34, .96); border: 1px solid var(--line); text-align: center; font-size: 19px; display: none;
+  }
+  .message.show { display: grid; gap: 16px; justify-items: center; }
+  .message button { padding: 14px 24px; border-radius: 999px; background: var(--signal); color: var(--signal-ink); font-weight: 800; }
+
+  /* ---------- Réglages ---------- */
+  dialog { background: var(--deck); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-lg); width: min(580px, calc(100vw - 32px)); padding: 26px; }
+  dialog::backdrop { background: rgba(0,0,0,.65); }
+  dialog h3 { margin: 0 0 6px; font: 700 22px/1.2 var(--font-display); }
+  dialog input { width: 100%; min-height: 54px; margin: 6px 0; padding: 0 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--deck-2); color: var(--text); }
+  dialog .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  dialog .row button { padding: 14px 22px; border-radius: 999px; background: var(--deck-2); font-weight: 800; }
+  dialog .row button.primary { background: var(--signal); color: var(--signal-ink); }
+  .lists { list-style: none; padding: 0; margin: 12px 0; }
+  .lists li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); word-break: break-all; }
+  .lists li span { flex: 1; }
+  .icon-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--deck-2); display: grid; place-items: center; flex: none; }
   .note { color: var(--muted); font-size: 15px; }
-  .summary { margin: 8px 0 0; }
 
-  @media (max-width: 600px) {
-    header { padding: 10px 16px; gap: 10px; }
-    .search { flex: 1 1 0; max-width: none; min-width: 0; }
-    main { padding: 4px 16px 110px; }
-    .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
-    .tile { min-height: 130px; }
-    .bar { flex-wrap: wrap; justify-content: center; }
-    .bar .info { width: 100%; margin: 0; text-align: center; }
-    .ctrl { width: 60px; height: 60px; }
-    .ctrl.big { width: 72px; height: 72px; }
-    .yt-open { left: 16px; right: 16px; text-align: center; font-size: 16px; }
+  /* ---------- Téléphone ---------- */
+  @media (max-width: 760px) {
+    :root { --rail: 0px; }
+    .rail {
+      top: auto; right: 0; width: auto; height: auto; flex-direction: row; justify-content: space-around; gap: 0;
+      padding: 6px max(8px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+      border-right: 0; border-top: 1px solid var(--line);
+    }
+    .mark, .rail .spacer { display: none; }
+    .nav { width: auto; flex: 1; min-height: 62px; font-size: 12px; }
+    main { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: max(16px, env(safe-area-inset-top, 0px)) 190px; }
+    .top h1 { font-size: 24px; }
+    .search { flex: 1 1 100%; }
+    .resume { grid-template-columns: auto 1fr; gap: 14px; padding: 14px; }
+    .resume .plate { width: 88px; height: 64px; }
+    .resume .name { font-size: 19px; }
+    .resume .go { grid-column: 1 / -1; width: 100%; height: 56px; border-radius: 999px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; }
+    .plate { height: 84px; }
+    .mini { left: 12px; right: 12px; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
+    .mini .plate { width: 64px; height: 46px; }
+    .round { width: 52px; height: 52px; }
+    .dock { justify-content: center; }
+    .dock .info { flex: 1 1 100%; text-align: center; }
+    .dock .title { font-size: 20px; }
+    .dock .round { width: 58px; height: 58px; }
+    .dock .round.main { width: 72px; height: 72px; }
+    .yt-open { left: 16px; right: 16px; justify-content: center; font-size: 15px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
 <body>
-<header>
-  <div class="brand"><span class="flag"><i></i><i></i><i></i></span>BG TV</div>
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="fav">★ Favoris</button>
-    <button class="tab" role="tab" data-tab="tv">TV</button>
-    <button class="tab" role="tab" data-tab="radio">Radio</button>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M8 2.5l4 3.5 4-3.5"/></symbol>
+  <symbol id="i-radio" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2.5"/><path d="M7 8l10-5"/><circle cx="15.5" cy="14" r="2.5"/><path d="M6.5 12.5h4M6.5 15.5h4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4.5-4.5"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 6v12l-9-6z"/><rect x="5" y="6" width="2.5" height="12" rx="1"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 6v12l9-6z"/><rect x="16.5" y="6" width="2.5" height="12" rx="1"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</svg>
+
+<nav class="rail" role="tablist" aria-label="Sections">
+  <div class="mark"><span class="flag"><i></i><i></i><i></i></span><b>BG TV</b></div>
+  <button class="nav tab" role="tab" data-tab="fav"><svg class="ic"><use href="#i-star"/></svg>Favoris</button>
+  <button class="nav tab" role="tab" data-tab="tv"><svg class="ic"><use href="#i-tv"/></svg>TV</button>
+  <button class="nav tab" role="tab" data-tab="radio"><svg class="ic"><use href="#i-radio"/></svg>Radio</button>
+  <span class="spacer"></span>
+  <button class="nav" id="settingsBtn"><svg class="ic"><use href="#i-gear"/></svg>Réglages</button>
+</nav>
+
+<main>
+  <div class="top">
+    <h1 id="pageTitle">Télévision</h1>
+    <label class="search">
+      <svg class="ic"><use href="#i-search"/></svg>
+      <input id="search" type="search" placeholder="Rechercher une chaîne" aria-label="Rechercher une chaîne">
+    </label>
   </div>
-  <input class="search" type="search" placeholder="Rechercher…" aria-label="Rechercher une chaîne">
-  <button class="icon-btn" id="settingsBtn" aria-label="Réglages">⚙︎</button>
-</header>
+  <div id="resume"></div>
+  <div id="list"></div>
+  <p class="foot" id="foot"></p>
+</main>
 
-<main id="list"><p class="status">Chargement des chaînes…</p></main>
-
-<div class="mini" id="mini">
-  <span class="text"><span class="title" id="miniTitle"></span><span class="song" id="miniSong" hidden></span></span>
-  <button class="ctrl" id="miniPlay" aria-label="Lecture / pause">⏸</button>
-  <button class="ctrl" id="miniOpen" aria-label="Ouvrir le lecteur">⤢</button>
+<div class="mini" id="mini" hidden>
+  <div class="plate" id="miniLogo"></div>
+  <button class="text" id="miniOpen" aria-label="Ouvrir le lecteur">
+    <span class="title" id="miniTitle"></span>
+    <span class="song" id="miniSong" hidden></span>
+    <span class="onair" id="miniLive">En direct</span>
+  </button>
+  <button class="round main" id="miniPlay" aria-label="Lecture / pause"><svg class="ic fill"><use href="#i-play"/></svg></button>
 </div>
 
 <section class="player" id="player" aria-label="Lecteur">
-  <video id="video" playsinline></video>
-  <iframe id="yt" hidden allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="YouTube"></iframe>
-  <a class="yt-open" id="ytOpen" hidden target="_blank" rel="noopener">Rien ne s'affiche ? Ouvrir dans YouTube ↗</a>
-  <div class="radio-art" id="radioArt"></div>
-  <div class="message" id="message"></div>
-  <div class="bar">
-    <button class="ctrl" id="closeBtn" aria-label="Retour à la liste">⌄</button>
+  <div class="stage">
+    <video id="video" playsinline></video>
+    <iframe id="yt" hidden allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="YouTube"></iframe>
+    <div class="radio-stage" id="radioStage">
+      <div class="wrap">
+        <div class="plate" id="radioLogo"></div>
+        <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="big-song" id="bigSong"></div>
+      </div>
+    </div>
+    <a class="yt-open" id="ytOpen" hidden target="_blank" rel="noopener">Rien ne s'affiche ? Ouvrir dans YouTube <svg class="ic"><use href="#i-out"/></svg></a>
+    <div class="message" id="message"></div>
+  </div>
+  <div class="dock">
+    <button class="round" id="closeBtn" aria-label="Retour à la liste"><svg class="ic"><use href="#i-down"/></svg></button>
     <div class="info">
+      <span class="onair" id="liveTag">En direct</span>
       <div class="title" id="title"></div>
       <div class="song" id="song" hidden></div>
       <div class="sub" id="sub"></div>
     </div>
-    <button class="ctrl star" id="favBtn" aria-label="Favori">☆</button>
-    <button class="ctrl" id="prevBtn" aria-label="Chaîne précédente">⏮</button>
-    <button class="ctrl big" id="playBtn" aria-label="Lecture / pause">⏸</button>
-    <button class="ctrl" id="nextBtn" aria-label="Chaîne suivante">⏭</button>
-    <button class="ctrl" id="fullBtn" aria-label="Plein écran">⛶</button>
+    <div class="controls">
+      <button class="round fav" id="favBtn" aria-label="Favori" aria-pressed="false"><svg class="ic"><use href="#i-star"/></svg></button>
+      <button class="round" id="prevBtn" aria-label="Chaîne précédente"><svg class="ic fill"><use href="#i-prev"/></svg></button>
+      <button class="round main" id="playBtn" aria-label="Lecture / pause"><svg class="ic fill"><use href="#i-pause"/></svg></button>
+      <button class="round" id="nextBtn" aria-label="Chaîne suivante"><svg class="ic fill"><use href="#i-next"/></svg></button>
+      <button class="round" id="fullBtn" aria-label="Plein écran"><svg class="ic"><use href="#i-expand"/></svg></button>
+    </div>
   </div>
 </section>
 
 <dialog id="settings">
-  <h3 style="margin-top:0">Mes playlists M3U</h3>
-  <p class="note">Comme dans APTV : ajoutez le lien d'une playlist M3U pour avoir d'autres chaînes.</p>
+  <h3>Mes playlists M3U</h3>
+  <p class="note">Ajoutez le lien d'une playlist M3U pour avoir d'autres chaînes, comme dans APTV.</p>
   <ul class="lists" id="customLists"></ul>
   <input id="m3uName" placeholder="Nom (ex. : Ma liste)">
   <input id="m3uUrl" type="url" placeholder="https://…/playlist.m3u">
@@ -267,7 +412,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v7",
+    version: "v8",
+    playing: false,
     song: "",
     customLists: store.get("customLists", []),
     current: null,
@@ -383,13 +529,15 @@
     const last = store.get("last", null);
     if (last && !state.current) {
       const channel = allChannels().find((c) => c.id === last);
-      if (channel) showMini(channel, false);
+      if (channel) { state.current = channel; renderResume(); }
     }
   }
 
   const allChannels = () => [...state.tv, ...state.radio];
 
   // ---------- Affichage de la liste ----------
+
+  const TAB_TITLES = { fav: "Mes favoris", tv: "Télévision", radio: "Radio" };
 
   function groupsFor(channels) {
     const map = new Map();
@@ -404,13 +552,37 @@
     });
   }
 
+  function icon(name, cls = "ic") {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", cls);
+    const use = document.createElementNS(ns, "use");
+    use.setAttribute("href", "#i-" + name);
+    svg.append(use);
+    return svg;
+  }
+
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
   function render() {
     document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.tab === state.tab));
+    $("pageTitle").textContent = TAB_TITLES[state.tab];
+    renderResume();
+
     const list = $("list");
     list.innerHTML = "";
+    $("foot").textContent = state.loading ? "" : `${state.version} · ${state.tv.length} chaînes TV · ${state.radio.length} radios`
+      + (state.errors.length ? " · Problème de chargement : " + state.errors.join(" · ") : "");
 
     if (state.loading) {
-      list.innerHTML = '<p class="status">Chargement des chaînes…</p>';
+      const grid = el("div", "grid");
+      for (let i = 0; i < 10; i++) grid.append(el("div", "skeleton"));
+      list.append(grid);
       return;
     }
 
@@ -421,42 +593,53 @@
     const q = state.query.trim().toLowerCase();
     if (q) channels = channels.filter((c) => c.name.toLowerCase().includes(q));
 
-    const summary = document.createElement("p");
-    summary.className = "note summary";
-    summary.textContent = `${state.version} · ${state.tv.length} chaînes TV · ${state.radio.length} radios`
-      + (state.errors.length ? " · Problème de chargement : " + state.errors.join(" · ") : "");
-    list.append(summary);
-
     if (!channels.length) {
-      const p = document.createElement("p");
-      p.className = "status";
-      p.textContent = state.tab === "fav" && !q
-        ? "Aucun favori. Ouvrez une chaîne et touchez ☆ pour l'ajouter ici."
-        : "Aucune chaîne trouvée.";
-      list.append(p);
+      list.append(el("p", "empty", state.tab === "fav" && !q
+        ? "Aucun favori pour l'instant. Ouvrez une chaîne et touchez l'étoile pour la retrouver ici."
+        : "Aucune chaîne ne correspond à cette recherche."));
+      return;
     }
 
-    const sections = state.tab === "fav" ? [["Mes favoris", channels]] : groupsFor(channels);
+    // Le numéro suit l'ordre de zapping de l'onglet, comme sur une télécommande.
+    let number = 0;
+    const sections = state.tab === "fav" ? [["Toutes", channels]] : groupsFor(channels);
     for (const [name, items] of sections) {
-      if (!items.length) continue;
-      const h = document.createElement("h2");
-      h.textContent = name;
-      const grid = document.createElement("div");
-      grid.className = "grid";
-      for (const c of items) grid.append(tile(c, items));
-      list.append(h, grid);
+      const head = el("div", "section-head");
+      head.append(el("h2", null, name), el("span", null, items.length + (items.length > 1 ? " chaînes" : " chaîne")));
+      const grid = el("div", "grid");
+      for (const c of items) grid.append(tile(c, items, ++number));
+      list.append(head, grid);
     }
-
   }
 
-  function logoNode(c, cls = "fallback") {
-    const box = document.createElement("div");
+  function renderResume() {
+    const box = $("resume");
+    box.innerHTML = "";
+    const c = state.current;
+    if (!c || state.loading || !$("mini").hidden) return;
+    const card = el("div", "resume");
+    const text = el("div");
+    text.append(el("div", "eyebrow", state.playing ? "En cours" : "Reprendre"), el("div", "name", c.name));
+    if (state.song) text.append(el("div", "song", "♪ " + state.song));
+    else text.append(el("div", "note", kindLabel(c) + " · " + c.group));
+    const go = el("button", "go");
+    go.setAttribute("aria-label", "Ouvrir " + c.name);
+    go.append(icon("play", "ic fill"));
+    go.onclick = () => (state.playing ? openPlayer() : play(c));
+    card.append(plate(c), text, go);
+    box.append(card);
+  }
+
+  function kindLabel(c) {
+    return c.kind === "radio" ? "Radio" : c.kind === "youtube" ? "YouTube" : "TV";
+  }
+
+  function plate(c) {
+    const box = el("div", "plate");
     const fallback = () => {
       box.innerHTML = "";
-      const f = document.createElement("div");
-      f.className = cls;
-      f.textContent = (c.name.match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase();
-      box.append(f);
+      const words = c.name.replace(/[·()\[\]]/g, " ").split(/\s+/).filter(Boolean);
+      box.append(el("span", "initials", words.slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"));
     };
     if (c.logo) {
       const img = document.createElement("img");
@@ -472,19 +655,16 @@
     return box;
   }
 
-  function tile(c, queue) {
-    const b = document.createElement("button");
-    b.className = "tile" + (state.current && state.current.id === c.id ? " playing" : "");
-    const logo = logoNode(c);
-    logo.className = "logo";
-    const name = document.createElement("span");
-    name.className = "name";
-    name.textContent = c.name;
-    b.append(logo, name);
+  function tile(c, queue, number) {
+    const b = el("button", "tile" + (state.current && state.current.id === c.id ? " playing" : ""));
+    b.setAttribute("aria-label", `${c.name}, ${kindLabel(c)}`);
+    const meta = el("div", "meta");
+    meta.append(el("span", "num", "CH " + String(number).padStart(2, "0")));
+    meta.append(el("span", "badge" + (c.kind === "youtube" ? " yt" : ""), kindLabel(c)));
+    b.append(plate(c), el("span", "name", c.name), meta);
     if (state.favorites.has(c.id)) {
-      const star = document.createElement("span");
-      star.className = "fav";
-      star.textContent = "★";
+      const star = el("span", "star");
+      star.append(icon("star", "ic fill"));
       b.append(star);
     }
     b.onclick = () => play(c, queue);
@@ -501,6 +681,7 @@
     store.set("last", c.id);
     hideMessage();
     stopStream();
+    state.playing = false;
 
     $("ytOpen").hidden = c.kind !== "youtube";
     if (c.kind === "youtube") {
@@ -606,7 +787,7 @@
       $(id).textContent = title ? "♪ " + title : "";
       $(id).hidden = !title;
     }
-    if (changed) updateMediaSession();
+    if (changed) { updateMediaSession(); updatePlayer(); renderResume(); }
   }
 
   async function fetchSongTitle(c) {
@@ -737,54 +918,75 @@
   function showError() {
     const m = $("message");
     m.innerHTML = "";
-    const text = document.createElement("div");
-    text.textContent = "Cette chaîne ne répond pas pour le moment (elle est peut-être réservée à la Bulgarie).";
-    const next = document.createElement("button");
-    next.textContent = "Chaîne suivante ⏭";
+    m.append(el("div", null, "Cette chaîne ne répond pas pour le moment. Elle est peut-être réservée à la Bulgarie."));
+    const next = el("button", null, "Chaîne suivante");
     next.onclick = () => zap(1);
-    m.append(text, next);
+    m.append(next);
     m.classList.add("show");
   }
 
   function hideMessage() { $("message").classList.remove("show"); }
 
   video.addEventListener("error", () => { if (!hls && video.getAttribute("src") && state.fail) state.fail(); });
-  video.addEventListener("playing", () => { hideMessage(); updatePlayer(); });
-  video.addEventListener("pause", updatePlayer);
+  video.addEventListener("playing", () => { hideMessage(); setPlaying(true); });
+  video.addEventListener("pause", () => setPlaying(false));
+
+  function setPlaying(playing) {
+    state.playing = playing;
+    updatePlayer();
+    renderResume();
+  }
 
   function openPlayer() {
     $("player").classList.add("open");
-    $("mini").classList.remove("show");
+    $("mini").hidden = true;
   }
 
   function closePlayer() {
     $("player").classList.remove("open");
-    if (state.current && state.current.kind === "youtube") stopStream();
+    if (state.current && state.current.kind === "youtube") {
+      stopStream();
+      state.playing = false;
+    }
     if (state.current) showMini(state.current, true);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    render();
   }
 
   function showMini(c, active) {
     if (!active) state.current = c;
     $("miniTitle").textContent = c.name;
-    $("miniPlay").textContent = video.paused ? "▶" : "⏸";
-    $("mini").classList.add("show");
+    const logo = $("miniLogo");
+    logo.replaceWith(Object.assign(plate(c), { id: "miniLogo" }));
+    $("miniLive").hidden = !state.playing;
+    setPlayIcon($("miniPlay"));
+    $("mini").hidden = false;
+    renderResume();
+  }
+
+  function setPlayIcon(button) {
+    button.innerHTML = "";
+    button.append(icon(state.playing ? "pause" : "play", "ic fill"));
   }
 
   function updatePlayer() {
     const c = state.current;
     if (!c) return;
     $("title").textContent = c.name;
-    $("sub").textContent = (c.kind === "radio" ? "Radio" : c.kind === "youtube" ? "YouTube officiel" : "TV")
-      + " · " + c.group + (c.id === "extra:fentv-clips" ? " · clips" : " · en direct");
+    $("sub").textContent = kindLabel(c) + (c.kind === "youtube" ? " officiel" : "") + " · " + c.group;
+    $("liveTag").hidden = c.id === "extra:fentv-clips";
     $("playBtn").hidden = c.kind === "youtube";
-    $("favBtn").textContent = state.favorites.has(c.id) ? "★" : "☆";
-    $("playBtn").textContent = video.paused ? "▶" : "⏸";
-    $("miniPlay").textContent = video.paused ? "▶" : "⏸";
+    $("favBtn").setAttribute("aria-pressed", state.favorites.has(c.id));
+    setPlayIcon($("playBtn"));
+    setPlayIcon($("miniPlay"));
+    $("miniLive").hidden = !state.playing;
     $("player").classList.toggle("radio", c.kind === "radio");
-    const art = $("radioArt");
-    art.innerHTML = "";
-    if (c.kind === "radio") art.append(logoNode(c));
+    $("player").classList.toggle("paused", !state.playing);
+    if (c.kind === "radio" && $("radioLogo").dataset.id !== c.id) {
+      $("radioLogo").replaceWith(Object.assign(plate(c), { id: "radioLogo" }));
+      $("radioLogo").dataset.id = c.id;
+    }
+    $("bigSong").textContent = state.song || c.name;
   }
 
   function toggleFavorite() {
@@ -850,7 +1052,7 @@
     render();
     window.scrollTo({ top: 0 });
   });
-  document.querySelector(".search").addEventListener("input", (e) => { state.query = e.target.value; render(); });
+  $("search").addEventListener("input", (e) => { state.query = e.target.value; render(); });
 
   $("closeBtn").onclick = closePlayer;
   $("playBtn").onclick = togglePlay;
@@ -858,18 +1060,18 @@
   $("nextBtn").onclick = () => zap(1);
   $("favBtn").onclick = toggleFavorite;
   $("fullBtn").onclick = () => {
-    const el = $("player");
+    const player = $("player");
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else if (player.requestFullscreen) player.requestFullscreen().catch(() => {});
   };
-  $("miniPlay").onclick = (e) => {
-    e.stopPropagation();
-    if (state.current && !video.src && !hls) play(state.current);
+  $("miniPlay").onclick = () => {
+    if (!state.current) return;
+    if (state.current.kind === "youtube" || (!video.getAttribute("src") && !hls)) play(state.current);
     else togglePlay();
-    showMini(state.current, true);
   };
   $("miniOpen").onclick = () => {
-    if (state.current && ((!video.src && !hls) || state.current.kind === "youtube")) play(state.current);
+    if (!state.current) return;
+    if (state.current.kind === "youtube" || (!video.getAttribute("src") && !hls)) play(state.current);
     else openPlayer();
   };
 
