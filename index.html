@@ -126,6 +126,7 @@
   .lists li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--panel-2); word-break: break-all; }
   .lists li span { margin-right: auto; }
   .note { color: var(--muted); font-size: 15px; }
+  .summary { margin: 8px 0 0; }
 
   @media (max-width: 600px) {
     header { padding: 10px 16px; gap: 10px; }
@@ -279,7 +280,7 @@
     const all = [];
     for (const list of lists) {
       try {
-        const res = await fetch(list.url, { cache: "no-cache" });
+        const res = await fetch(list.url, { cache: "no-cache", signal: AbortSignal.timeout(20000) });
         if (!res.ok) throw new Error("HTTP " + res.status);
         all.push(...parseM3U(await res.text(), "tv", list === lists[0] ? "Autres" : list.name));
       } catch (e) {
@@ -292,7 +293,7 @@
   async function loadRadio() {
     for (const server of RADIO_SERVERS) {
       try {
-        const res = await fetch(server + RADIO_QUERY);
+        const res = await fetch(server + RADIO_QUERY, { signal: AbortSignal.timeout(15000) });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const stations = await res.json();
         state.radio = dedupe(stations
@@ -311,8 +312,10 @@
 
   function dedupe(list) {
     const seen = new Set();
-    // Une page https ne peut pas lire un flux http : on ne garde que les flux https.
-    return list.filter((c) => c.url.startsWith("https://") && !seen.has(c.id) && seen.add(c.id));
+    // Une page https ne peut pas lire un flux http : on tente la version https du même lien.
+    return list
+      .filter((c) => !seen.has(c.id) && seen.add(c.id))
+      .map((c) => ({ ...c, url: c.url.replace(/^http:\/\//i, "https://"), logo: c.logo.replace(/^http:\/\//i, "https://") }));
   }
 
   async function loadAll() {
@@ -363,6 +366,12 @@
     const q = state.query.trim().toLowerCase();
     if (q) channels = channels.filter((c) => c.name.toLowerCase().includes(q));
 
+    const summary = document.createElement("p");
+    summary.className = "note summary";
+    summary.textContent = `${state.tv.length} chaînes TV · ${state.radio.length} radios`
+      + (state.errors.length ? " · Problème de chargement : " + state.errors.join(" · ") : "");
+    list.append(summary);
+
     if (!channels.length) {
       const p = document.createElement("p");
       p.className = "status";
@@ -383,12 +392,6 @@
       list.append(h, grid);
     }
 
-    if (state.errors.length) {
-      const p = document.createElement("p");
-      p.className = "status";
-      p.textContent = "Problème de chargement : " + state.errors.join(" · ");
-      list.append(p);
-    }
   }
 
   function logoNode(c, cls = "fallback") {
