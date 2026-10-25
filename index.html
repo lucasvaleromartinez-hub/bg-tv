@@ -179,7 +179,9 @@
   /* (taille normale : YouTube refuse de lire dans un lecteur de moins de 200 px) */
   .player.audio-only #yt { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
   .player.audio-only .radio-stage { z-index: 1; }
-  .stage .message { z-index: 2; }
+  .stage .message { z-index: 3; }
+  .player.audio-only.yt-visible #yt { opacity: 1; pointer-events: auto; z-index: 2; }
+  .message.hint { top: auto; bottom: 16px; transform: translateX(-50%); pointer-events: none; }
   .radio-stage .wrap { display: grid; justify-items: center; gap: 22px; max-width: 900px; }
   .radio-stage .plate { width: min(320px, 56vw); height: min(220px, 38vw); border-radius: 26px; padding: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
   .radio-stage .big-song { font: 700 clamp(22px, 3.4vw, 40px)/1.2 var(--font-display); color: var(--text); text-wrap: balance; }
@@ -543,7 +545,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v27",
+    version: "v28",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -932,12 +934,25 @@
     if (c.kind === "youtube") {
       video.hidden = true;
       yt.hidden = false;
-      yt.src = c.url + "&enablejsapi=1" + (location.protocol === "https:" ? "&origin=" + encodeURIComponent(location.origin) : "");
+      $("player").classList.remove("yt-visible");
+      // Lecteur invisible : le navigateur bloque souvent le son au démarrage. On démarre en muet
+      // (toujours autorisé), puis on remet le son dès que la lecture commence.
+      yt.src = c.url + "&enablejsapi=1" + (c.audioOnly ? "&mute=1" : "") + (location.protocol === "https:" ? "&origin=" + encodeURIComponent(location.origin) : "");
       // On s'abonne aux événements du lecteur YouTube pour savoir s'il lit vraiment.
       yt.onload = () => { try { yt.contentWindow.postMessage(JSON.stringify({ event: "listening", id: "bgtv" }), "*"); } catch {} };
       state.ytOk = false;
       clearTimeout(state.ytTimer);
-      state.ytTimer = setTimeout(() => { if (state.current === c && !state.ytOk) showYtProblem(c, "La vidéo ne démarre pas."); }, 12000);
+      state.ytTimer = setTimeout(() => {
+        if (state.current !== c || state.ytOk) return;
+        if (c.audioOnly) {
+          // Toujours rien : on montre le lecteur YouTube pour qu'un toucher sur ▶ lance le son.
+          $("player").classList.add("yt-visible");
+          showLoading("Touchez ▶ sur la vidéo pour lancer le son");
+          $("message").classList.add("hint");
+        } else {
+          showYtProblem(c, "La vidéo ne démarre pas.");
+        }
+      }, c.audioOnly ? 5000 : 12000);
       $("ytOpen").href = c.open || c.url;
     } else {
       yt.hidden = true;
@@ -1229,7 +1244,15 @@
     const c = state.current;
     if (!c || c.kind !== "youtube") return;
     const playing = (d.event === "onStateChange" && d.info === 1) || (d.event === "infoDelivery" && d.info && d.info.playerState === 1);
-    if (playing) { state.ytOk = true; clearTimeout(state.ytTimer); hideMessage(); setPlaying(true); }
+    if (playing) {
+      if (!state.ytOk && c.audioOnly) {
+        const cmd = (func, args = []) => yt.contentWindow.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+        cmd("unMute"); cmd("setVolume", [100]);
+        // Le son est lancé : on recache la vidéo derrière l'écran radio.
+        setTimeout(() => $("player").classList.remove("yt-visible"), 1500);
+      }
+      state.ytOk = true; clearTimeout(state.ytTimer); hideMessage(); setPlaying(true);
+    }
     if (d.event === "onError") {
       clearTimeout(state.ytTimer);
       showYtProblem(c, d.info === 101 || d.info === 150 ? "Ce propriétaire interdit la lecture de ses vidéos hors de YouTube."
@@ -1251,7 +1274,7 @@
     m.classList.add("show");
   }
 
-  function hideMessage() { $("message").classList.remove("show", "loading"); }
+  function hideMessage() { $("message").classList.remove("show", "loading", "hint"); }
 
   function showLoading(text = "Connexion…") {
     const m = $("message");
