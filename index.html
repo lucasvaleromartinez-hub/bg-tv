@@ -511,7 +511,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v21",
+    version: "v22",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -638,6 +638,12 @@
       .trim();
   }
 
+  const MUSIC_NAMES = /hit ?mix|the voice|city tv|magic tv|planeta|балканика|balkanika|fen ?tv|music|музик/i;
+  function isWantedMusic(c) {
+    if (/folk|фолк|folklor|фолклор|narodn|народн|rodina/i.test(c.name) && !/orient/i.test(c.name)) return false;
+    return c.group === "Musique" || MUSIC_NAMES.test(c.name) || /orient/i.test(c.name);
+  }
+
   async function loadTV() {
     const lists = [{ name: "TV bulgares", url: TV_PLAYLIST }, ...state.customLists];
     const all = [];
@@ -645,7 +651,10 @@
       try {
         const res = await fetch(list.url, { cache: "no-cache", signal: AbortSignal.timeout(20000) });
         if (!res.ok) throw new Error("HTTP " + res.status);
-        all.push(...parseM3U(await res.text(), "tv", list === lists[0] ? "Autres" : list.name));
+        const parsed = parseM3U(await res.text(), "tv", list === lists[0] ? "Autres" : list.name);
+        // Liste publique : on ne garde que les chaînes musicales, style pop-folk / chalga.
+        // Le folklore bulgare traditionnel est écarté (sauf l'« Orient Folk », qui est de la chalga).
+        all.push(...(list === lists[0] ? parsed.filter(isWantedMusic) : parsed));
       } catch (e) {
         state.errors.push(`${list.name} : ${e.message}`);
       }
