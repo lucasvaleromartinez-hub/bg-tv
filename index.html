@@ -176,7 +176,10 @@
   }
   .player.radio .radio-stage { display: grid; }
   /* YouTube écouté comme une radio : la vidéo tourne mais reste invisible derrière l'écran radio. */
-  .player.audio-only #yt { position: absolute; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+  /* (taille normale : YouTube refuse de lire dans un lecteur de moins de 200 px) */
+  .player.audio-only #yt { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
+  .player.audio-only .radio-stage { z-index: 1; }
+  .stage .message { z-index: 2; }
   .radio-stage .wrap { display: grid; justify-items: center; gap: 22px; max-width: 900px; }
   .radio-stage .plate { width: min(320px, 56vw); height: min(220px, 38vw); border-radius: 26px; padding: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
   .radio-stage .big-song { font: 700 clamp(22px, 3.4vw, 40px)/1.2 var(--font-display); color: var(--text); text-wrap: balance; }
@@ -540,7 +543,7 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v26",
+    version: "v27",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -929,7 +932,12 @@
     if (c.kind === "youtube") {
       video.hidden = true;
       yt.hidden = false;
-      yt.src = c.url + (location.protocol === "https:" ? "&origin=" + encodeURIComponent(location.origin) : "");
+      yt.src = c.url + "&enablejsapi=1" + (location.protocol === "https:" ? "&origin=" + encodeURIComponent(location.origin) : "");
+      // On s'abonne aux événements du lecteur YouTube pour savoir s'il lit vraiment.
+      yt.onload = () => { try { yt.contentWindow.postMessage(JSON.stringify({ event: "listening", id: "bgtv" }), "*"); } catch {} };
+      state.ytOk = false;
+      clearTimeout(state.ytTimer);
+      state.ytTimer = setTimeout(() => { if (state.current === c && !state.ytOk) showYtProblem(c, "La vidéo ne démarre pas."); }, 12000);
       $("ytOpen").href = c.open || c.url;
     } else {
       yt.hidden = true;
@@ -1211,6 +1219,35 @@
     const next = el("button", null, "Chaîne suivante");
     next.onclick = () => zap(1);
     m.append(next);
+    m.classList.add("show");
+  }
+
+  // Messages du lecteur YouTube : lecture en cours, ou erreur (vidéo privée, intégration interdite…).
+  window.addEventListener("message", (e) => {
+    if (!/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
+    let d; try { d = JSON.parse(e.data); } catch { return; }
+    const c = state.current;
+    if (!c || c.kind !== "youtube") return;
+    const playing = (d.event === "onStateChange" && d.info === 1) || (d.event === "infoDelivery" && d.info && d.info.playerState === 1);
+    if (playing) { state.ytOk = true; clearTimeout(state.ytTimer); hideMessage(); setPlaying(true); }
+    if (d.event === "onError") {
+      clearTimeout(state.ytTimer);
+      showYtProblem(c, d.info === 101 || d.info === 150 ? "Ce propriétaire interdit la lecture de ses vidéos hors de YouTube."
+        : c.url.includes("live_stream") ? "Pas de direct en ce moment sur cette chaîne." : "Cette vidéo n'est pas disponible.");
+    }
+  });
+
+  function showYtProblem(c, text) {
+    const m = $("message");
+    m.innerHTML = "";
+    m.classList.remove("loading");
+    m.append(el("div", null, text));
+    const open = el("a", null, "Ouvrir dans YouTube");
+    open.href = c.open || c.url; open.target = "_blank"; open.rel = "noopener";
+    open.style.cssText = "display:inline-block;margin-top:12px;font-weight:800;color:var(--signal)";
+    const next = el("button", null, "Chaîne suivante");
+    next.onclick = () => zap(1);
+    m.append(open, next);
     m.classList.add("show");
   }
 
