@@ -583,6 +583,12 @@
   const leveled = new Audio();
   leveled.crossOrigin = "anonymous";
   leveled.preload = "auto";
+  // Lecteur audio simple (sans réglage de volume) : c'est lui qu'iOS laisse jouer écran verrouillé.
+  const plainAudio = new Audio();
+  plainAudio.preload = "auto";
+  plainAudio.setAttribute("playsinline", "");
+  // iPhone / iPad : iOS coupe les vidéos et le son passé par Web Audio quand l'écran se verrouille.
+  const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   let media = video;
   const isRelayed = (u) => !!RELAY && typeof u === "string" && u.startsWith(RELAY);
 
@@ -1004,7 +1010,8 @@
     if (hls) { hls.destroy(); hls = null; }
     if (ts) { try { ts.destroy(); } catch {} ts = null; }
     clearTimeout(state.stallTimer);
-    for (const m of [video, leveled]) {
+    state.bg = false;
+    for (const m of [video, leveled, plainAudio]) {
       m.pause();
       if (m.getAttribute("src")) { m.removeAttribute("src"); m.load(); } // coupe vraiment l'ancien flux
     }
@@ -1019,6 +1026,7 @@
     state.attempt = attempt;
     state.currentUrl = url;
     const fail = () => {
+      if (state.bg) return;
       if (state.current !== c || state.attempt !== attempt) return;
       if (attempt + 1 < urls.length) startStream(c, attempt + 1);
       else showError();
@@ -1033,7 +1041,9 @@
     if (c.kind === "radio" && attempt) setSongNote("Connexion via le lien de secours…");
     if (c.kind === "tv" && attempt) showLoading("Connexion via le lien de secours…");
     // Radio via le relais → lecteur avec volume automatique ; sinon le lecteur normal.
-    const target = c.kind === "radio" && isRelayed(url) ? leveled : video;
+    // Radio : toujours un lecteur audio (un lecteur vidéo est coupé par iOS écran verrouillé).
+    // Sur iPhone, pas de réglage de volume : Web Audio s'arrête quand l'écran se verrouille.
+    const target = c.kind === "radio" ? (isRelayed(url) && !IOS ? leveled : plainAudio) : video;
     if (target !== media) { media.pause(); if (media.getAttribute("src")) { media.removeAttribute("src"); media.load(); } }
     media = target;
     if (media === leveled) startLeveling(c);
@@ -1050,7 +1060,10 @@
       Promise.resolve(ts.play()).catch(() => {});
       return;
     }
-    if (isHls && window.Hls && Hls.isSupported()) {
+    // iPhone : le lecteur HLS d'iOS continue en arrière-plan, contrairement à hls.js.
+    if (isHls && IOS && media.canPlayType("application/vnd.apple.mpegurl")) {
+      media.src = url;
+    } else if (isHls && window.Hls && Hls.isSupported()) {
       hls = new Hls({ lowLatencyMode: false });
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (!data.fatal) return;
@@ -1239,6 +1252,7 @@
       // En direct : on relance le flux pour revenir au direct.
       play(state.current);
     } else {
+      state.wantPlay = false;
       media.pause();
     }
   }
@@ -1308,7 +1322,7 @@
     m.classList.add("show", "loading");
   }
 
-  for (const m of [video, leveled]) {
+  for (const m of [video, leveled, plainAudio]) {
     m.addEventListener("error", () => { if (m === media && !hls && !ts && m.getAttribute("src") && state.fail) state.fail(); });
     m.addEventListener("playing", () => {
       if (m !== media) return;
@@ -1320,8 +1334,35 @@
     m.addEventListener("pause", () => { if (m === media) setPlaying(false); });
   }
 
+  // ---------- Écran verrouillé (iPhone) ----------
+  // iOS met en pause les vidéos quand l'écran se verrouille : pour une chaîne TV, on passe
+  // le même flux dans le lecteur audio pour garder le son, puis on remet l'image au retour.
+  state.wantPlay = false;
+  document.addEventListener("visibilitychange", () => {
+    const c = state.current;
+    if (!IOS || !c || c.kind !== "tv") return;
+    if (document.hidden) {
+      if (!state.wantPlay || media !== video || ts) return;
+      const url = state.currentUrl;
+      if (!url || !plainAudio.canPlayType("application/vnd.apple.mpegurl")) return;
+      clearTimeout(state.stallTimer);
+      state.bg = true;
+      media = plainAudio;
+      plainAudio.src = url;
+      plainAudio.play().catch(() => {});
+      if (hls) { hls.destroy(); hls = null; }
+      video.pause();
+      if (video.getAttribute("src")) { video.removeAttribute("src"); video.load(); }
+    } else if (state.bg) {
+      state.bg = false;
+      startStream(c, state.attempt || 0);
+    }
+  });
+
   function setPlaying(playing) {
     state.playing = playing;
+    if (playing) state.wantPlay = true;
+    if ("mediaSession" in navigator) { try { navigator.mediaSession.playbackState = playing ? "playing" : "paused"; } catch {} }
     updatePlayer();
     renderResume();
   }
@@ -1400,7 +1441,7 @@
     });
     const handlers = {
       play: togglePlay,
-      pause: () => media.pause(),
+      pause: () => { state.wantPlay = false; media.pause(); },
       nexttrack: () => zap(1),
       previoustrack: () => zap(-1)
     };
