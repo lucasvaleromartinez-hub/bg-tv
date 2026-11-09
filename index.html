@@ -275,6 +275,32 @@
     .dock .round.main { width: 72px; height: 72px; }
     .yt-open { left: 16px; right: 16px; justify-content: center; font-size: 15px; }
   }
+  /* ---------- Titres entendus ---------- */
+  .songs { display: grid; gap: 10px; }
+  .song-day { margin: 22px 0 4px; color: var(--muted); font-size: 14px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+  .song-row {
+    display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 14px;
+    padding: 12px 14px; border-radius: var(--r-md); background: var(--deck); border: 1px solid var(--line);
+  }
+  .song-row time { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .song-row .what { min-width: 0; }
+  .song-row .t { font-weight: 800; overflow-wrap: anywhere; }
+  .song-row .st { color: var(--muted); font-size: 14px; font-weight: 600; }
+  .song-row .acts { display: flex; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 999px; background: var(--deck-2); color: var(--text); font-weight: 800; font-size: 15px; text-decoration: none; }
+  .pill.yt { color: #ff5c6c; }
+  .clear-songs { margin-top: 24px; }
+  .add-radio { display: flex; gap: 10px; align-items: center; }
+  .add-radio input { flex: 1; min-width: 0; margin: 0; }
+  .add-radio button { flex: none; min-height: 54px; padding: 0 22px; border-radius: 999px; background: var(--signal); color: var(--signal-ink); font-weight: 800; }
+  .lists .pill { flex: none; }
+  #addRadioResults li, #myRadiosList li { flex-wrap: wrap; }
+  #addRadioResults li span, #myRadiosList li span { flex: 1 1 200px; word-break: normal; overflow-wrap: anywhere; }
+  .lists li small { display: block; color: var(--muted); font-size: 13px; word-break: normal; }
+  @media (max-width: 760px) {
+    .song-row { grid-template-columns: 1fr auto; }
+    .song-row time { grid-column: 1 / -1; font-size: 13px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -294,6 +320,7 @@
   <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
   <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
   <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 </svg>
 
@@ -302,6 +329,7 @@
   <button class="nav tab" role="tab" data-tab="fav"><svg class="ic"><use href="#i-star"/></svg>Favoris</button>
   <button class="nav tab" role="tab" data-tab="tv"><svg class="ic"><use href="#i-tv"/></svg>TV</button>
   <button class="nav tab" role="tab" data-tab="radio"><svg class="ic"><use href="#i-radio"/></svg>Radio</button>
+  <button class="nav tab" role="tab" data-tab="songs"><svg class="ic"><use href="#i-note"/></svg>Titres</button>
   <span class="spacer"></span>
   <button class="nav" id="settingsBtn"><svg class="ic"><use href="#i-gear"/></svg>Réglages</button>
 </nav>
@@ -373,6 +401,17 @@
     <button id="closeSettings">Fermer</button>
   </div>
   <p class="note">La vidéo ne s'affiche que voiture à l'arrêt : c'est la voiture qui l'impose.</p>
+  <div class="check">
+    <h3>Ajouter une radio</h3>
+    <p class="note">Tapez le nom d'une radio, de n'importe quel pays. Elle arrive dans l'onglet Radio (« Mes ajouts ») et dans vos favoris.</p>
+    <div class="add-radio">
+      <input id="addRadioQuery" type="search" placeholder="Ex. : Radio Fix, Fresh, Galgalatz…" aria-label="Nom de la radio">
+      <button id="addRadioSearch" class="primary">Chercher</button>
+    </div>
+    <p class="note" id="addRadioNote" hidden></p>
+    <ul class="lists" id="addRadioResults"></ul>
+    <ul class="lists" id="myRadiosList"></ul>
+  </div>
   <div class="check">
     <h3>Tester les chaînes</h3>
     <p class="note" id="checkNote">Essaie chaque radio ou chaîne TV une par une, sans le son. Celles qui ne répondent pas passent en bas de la liste, dans « Hors service ».</p>
@@ -554,11 +593,14 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v34",
-    versionName: "iPhone écran verrouillé",
+    version: "v35",
+    versionName: "Titres, récents et ajout de radios",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
+    recent: store.get("recent", []),
+    songLog: store.get("songLog", []),
+    myRadios: store.get("myRadios", []),
     current: null,
     queue: [],
     loading: true,
@@ -755,7 +797,7 @@
                 : /chalga|чалга|folk|фолк/i.test(s.tags) ? "Chalga & folk" : "Radios"
             };
           }));
-        state.radio = [...EXTRA_RADIO, ...list];
+        state.radio = withMine(list);
         store.set("radioCache2", list);
         return;
       } catch (e) {
@@ -764,8 +806,26 @@
     }
     // Aucun serveur n'a répondu : on reprend la dernière liste connue.
     const cached = store.get("radioCache2", []).filter((c) => !DEAD_RADIOS.has(linkKey(c.src || c.url)));
-    state.radio = [...EXTRA_RADIO, ...cached];
+    state.radio = withMine(cached);
     if (!cached.length) state.errors.push("Radios : " + (state.lastRadioError || "annuaire injoignable"));
+  }
+
+  // Une radio de l'annuaire radio-browser, transformée en chaîne de l'appli.
+  function toChannel(s, group) {
+    const urls = candidates(s.url_resolved, s.url);
+    return {
+      id: s.url_resolved, src: s.url_resolved, url: urls[0], alts: urls.slice(1),
+      kind: "radio", hls: s.hls === 1,
+      name: String(s.name || "").trim(), logo: (s.favicon || "").replace(/^http:\/\//i, "https://"), group
+    };
+  }
+
+  const myRadioChannels = () => state.myRadios.map((s) => toChannel(s, "Mes ajouts"));
+
+  function withMine(list) {
+    const mine = myRadioChannels();
+    const ids = new Set(mine.map((c) => c.id));
+    return [...EXTRA_RADIO, ...mine, ...list.filter((c) => !ids.has(c.id))];
   }
 
   function dedupe(list) {
@@ -796,7 +856,72 @@
 
   // ---------- Affichage de la liste ----------
 
-  const TAB_TITLES = { fav: "Mes favoris", tv: "Télévision", radio: "Radio" };
+  const TAB_TITLES = { fav: "Mes favoris", tv: "Télévision", radio: "Radio", songs: "Titres entendus" };
+
+  function logSong(title, c) {
+    const last = state.songLog[0];
+    if (last && last.title === title && last.station === c.name) return;
+    state.songLog = [{ title, station: c.name, id: c.id, at: Date.now() }, ...state.songLog].slice(0, 150);
+    store.set("songLog", state.songLog);
+    if (state.tab === "songs" && $("player").classList.contains("open") === false) render();
+  }
+
+  function dayLabel(ts) {
+    const d = new Date(ts), today = new Date();
+    const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return "Aujourd'hui";
+    if (d.toDateString() === yesterday.toDateString()) return "Hier";
+    return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  }
+
+  function renderSongs(list, q) {
+    let songs = state.songLog;
+    if (q) songs = songs.filter((x) => (x.title + " " + x.station).toLowerCase().includes(q));
+    if (!songs.length) {
+      list.append(el("p", "empty", q
+        ? "Aucun titre ne correspond à cette recherche."
+        : "Les chansons entendues sur les radios s'afficheront ici, avec un lien pour les retrouver sur YouTube."));
+      return;
+    }
+    const box = el("div", "songs");
+    let day = "";
+    for (const x of songs) {
+      const label = dayLabel(x.at);
+      if (label !== day) { day = label; box.append(el("div", "song-day", label)); }
+      const row = el("div", "song-row");
+      const time = el("time", null, new Date(x.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+      const what = el("div", "what");
+      what.append(el("div", "t", x.title), el("div", "st", x.station));
+      const acts = el("div", "acts");
+      const yt = el("a", "pill yt", "YouTube");
+      yt.href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(x.title);
+      yt.target = "_blank";
+      yt.rel = "noopener";
+      const copy = el("button", "pill", "Copier");
+      copy.onclick = async () => {
+        let ok = false;
+        try { await navigator.clipboard.writeText(x.title); ok = true; } catch {}
+        copy.textContent = ok ? "Copié ✓" : "Impossible";
+        setTimeout(() => (copy.textContent = "Copier"), 2000);
+      };
+      acts.append(yt, copy);
+      row.append(time, what, acts);
+      box.append(row);
+    }
+    list.append(box);
+    const clear = el("button", "pill clear-songs", "Effacer l'historique");
+    clear.onclick = () => {
+      if (clear.dataset.sure) {
+        state.songLog = [];
+        store.set("songLog", []);
+        render();
+      } else {
+        clear.dataset.sure = "1";
+        clear.textContent = "Toucher encore pour tout effacer";
+      }
+    };
+    list.append(clear);
+  }
 
   function groupsFor(channels) {
     const map = new Map();
@@ -804,11 +929,8 @@
       if (!map.has(c.group)) map.set(c.group, []);
       map.get(c.group).push(c);
     }
-    return [...map.entries()].sort(([a], [b]) => {
-      const ma = /musique|chalga/i.test(a), mb = /musique|chalga/i.test(b);
-      if (ma !== mb) return ma ? -1 : 1;
-      return a.localeCompare(b, "fr");
-    });
+    const rank = (n) => (n === "Mes ajouts" ? 0 : /musique|chalga/i.test(n) ? 1 : 2);
+    return [...map.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b, "fr"));
   }
 
   function icon(name, cls = "ic") {
@@ -831,6 +953,7 @@
   function render() {
     document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", t.dataset.tab === state.tab));
     $("pageTitle").textContent = TAB_TITLES[state.tab];
+    $("search").placeholder = state.tab === "songs" ? "Rechercher un titre" : "Rechercher une chaîne";
     renderResume();
 
     const list = $("list");
@@ -845,14 +968,19 @@
       return;
     }
 
+    const q = state.query.trim().toLowerCase();
+    if (state.tab === "songs") { renderSongs(list, q); return; }
+
     let channels = state.tab === "fav"
       ? allChannels().filter((c) => state.favorites.has(c.id))
       : state.tab === "radio" ? state.radio : state.tv;
-
-    const q = state.query.trim().toLowerCase();
     if (q) channels = channels.filter((c) => c.name.toLowerCase().includes(q));
 
-    if (!channels.length) {
+    // Favoris : les dernières chaînes écoutées d'abord.
+    const byId = new Map(allChannels().map((c) => [c.id, c]));
+    const recent = state.tab === "fav" && !q ? state.recent.map((id) => byId.get(id)).filter(Boolean).slice(0, 6) : [];
+
+    if (!channels.length && !recent.length) {
       list.append(el("p", "empty", state.tab === "fav" && !q
         ? "Aucun favori pour l'instant. Ouvrez une chaîne et touchez l'étoile pour la retrouver ici."
         : "Aucune chaîne ne correspond à cette recherche."));
@@ -867,7 +995,9 @@
       cta.onclick = () => { renderSettings(); $("settings").showModal(); $("checkBtn").scrollIntoView({ block: "center" }); if (!checking) checkAll(kind); };
       list.append(cta);
     }
-    let sections = state.tab === "fav" ? [["Toutes", channels]] : groupsFor(channels);
+    let sections = state.tab === "fav"
+      ? [...(recent.length ? [["Écoutés récemment", recent]] : []), ...(channels.length ? [["Mes favoris", channels]] : [])]
+      : groupsFor(channels);
     if (state.tab === "radio") {
       // Une radio qui échoue au test disparaît de la liste.
       const status = store.get("streamStatus", {});
@@ -958,6 +1088,8 @@
     state.current = c;
     state.queue = queue.length ? queue : [c];
     store.set("last", c.id);
+    state.recent = [c.id, ...state.recent.filter((id) => id !== c.id)].slice(0, 10);
+    store.set("recent", state.recent);
     hideMessage();
     stopStream();
     state.playing = false;
@@ -1128,7 +1260,10 @@
       $(id).textContent = title ? "♪ " + title : "";
       $(id).hidden = !title;
     }
-    if (changed) { updateMediaSession(); updatePlayer(); renderResume(); }
+    if (changed) {
+      if (title && state.current) logSong(title, state.current);
+      updateMediaSession(); updatePlayer(); renderResume();
+    }
   }
 
   async function fetchSongTitle(c) {
@@ -1588,6 +1723,84 @@
     render();
   }
 
+  // ---------- Ajouter une radio ----------
+
+  async function searchRadios(name) {
+    for (const server of RADIO_SERVERS) {
+      try {
+        const res = await fetch(server + "/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=25&name="
+          + encodeURIComponent(name), { signal: AbortSignal.timeout(10000) });
+        if (res.ok) return (await res.json()).filter((s) => s.url_resolved);
+      } catch {}
+    }
+    throw new Error("annuaire injoignable");
+  }
+
+  function radioLine(s) {
+    return [s.country || s.countrycode, s.codec && s.bitrate ? `${s.codec} ${s.bitrate} kbit/s` : s.codec, (s.tags || "").split(",").slice(0, 3).join(", ")]
+      .filter(Boolean).join(" · ");
+  }
+
+  function renderMyRadios() {
+    const ul = $("myRadiosList");
+    ul.innerHTML = "";
+    if (!state.myRadios.length) return;
+    ul.append(el("li", "note", "Mes radios ajoutées :"));
+    state.myRadios.forEach((s, i) => {
+      const li = el("li");
+      const span = el("span", null, s.name);
+      span.append(el("small", null, radioLine(s)));
+      const del = el("button", "icon-btn", "✕");
+      del.setAttribute("aria-label", "Retirer " + s.name);
+      del.onclick = () => {
+        state.myRadios.splice(i, 1);
+        store.set("myRadios", state.myRadios);
+        state.radio = state.radio.filter((c) => c.id !== s.url_resolved || c.group !== "Mes ajouts");
+        renderMyRadios();
+        render();
+      };
+      li.append(span, del);
+      ul.append(li);
+    });
+  }
+
+  function addMyRadio(s) {
+    const station = { name: s.name, url_resolved: s.url_resolved, url: s.url, favicon: s.favicon, hls: s.hls,
+      country: s.country, countrycode: s.countrycode, codec: s.codec, bitrate: s.bitrate, tags: s.tags };
+    state.myRadios = [station, ...state.myRadios.filter((x) => x.url_resolved !== s.url_resolved)];
+    store.set("myRadios", state.myRadios);
+    state.favorites.add(s.url_resolved);
+    store.set("favorites", [...state.favorites]);
+    state.radio = withMine(state.radio.filter((c) => !c.id.startsWith("extra:") && c.group !== "Mes ajouts"));
+    renderMyRadios();
+    render();
+  }
+
+  async function runRadioSearch() {
+    const name = $("addRadioQuery").value.trim();
+    const note = $("addRadioNote"), ul = $("addRadioResults");
+    ul.innerHTML = "";
+    if (name.length < 2) { $("addRadioQuery").focus(); return; }
+    note.hidden = false;
+    note.textContent = "Recherche…";
+    let results;
+    try { results = await searchRadios(name); }
+    catch { note.textContent = "L'annuaire des radios ne répond pas. Réessayez dans un instant."; return; }
+    note.textContent = results.length ? `${results.length} radio${results.length > 1 ? "s" : ""} trouvée${results.length > 1 ? "s" : ""}.` : "Aucune radio trouvée avec ce nom.";
+    const mine = new Set(state.myRadios.map((x) => x.url_resolved));
+    for (const s of results) {
+      const li = el("li");
+      const span = el("span", null, s.name.trim());
+      span.append(el("small", null, radioLine(s)));
+      const listen = el("button", "pill", "Écouter");
+      listen.onclick = () => { $("settings").close(); play(toChannel(s, "Aperçu"), []); };
+      const add = el("button", "pill", mine.has(s.url_resolved) ? "Ajoutée ✓" : "Ajouter");
+      add.onclick = () => { addMyRadio(s); add.textContent = "Ajoutée ✓"; };
+      li.append(span, listen, add);
+      ul.append(li);
+    }
+  }
+
   // ---------- Événements ----------
 
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => {
@@ -1619,7 +1832,9 @@
     else openPlayer();
   };
 
-  $("settingsBtn").onclick = () => { renderSettings(); $("settings").showModal(); };
+  $("settingsBtn").onclick = () => { renderSettings(); renderMyRadios(); $("settings").showModal(); };
+  $("addRadioSearch").onclick = runRadioSearch;
+  $("addRadioQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") runRadioSearch(); });
   $("closeSettings").onclick = () => $("settings").close();
   $("checkBtn").onclick = () => checkAll("radio");
   $("checkTvBtn").onclick = () => checkAll("tv");
