@@ -454,6 +454,33 @@
     .song-row time { grid-column: auto; }
     .song-row .acts { justify-content: flex-start; }
   }
+
+  /* ---------- Lecteur : la pochette s'adapte à la hauteur vraiment disponible ---------- */
+  /* (sur iPhone, les barres de Safari mangent une partie de l'écran) */
+  .player { height: 100%; height: 100dvh; }
+  .stage { overflow: hidden; }
+  .radio-stage { container-type: size; padding: 16px; }
+  .radio-stage .wrap { gap: min(22px, 4cqh); }
+  .radio-stage .art { width: min(360px, 55cqh, 72cqw); }
+  .radio-stage .big-song { font-size: clamp(16px, min(3vw, 6cqh), 34px); -webkit-line-clamp: 3; }
+  .radio-stage .eq { height: min(34px, 7cqh); }
+  @container (max-height: 360px) {
+    .radio-stage .art { width: min(360px, 62cqh, 72cqw); }
+    .radio-stage .big-song { -webkit-line-clamp: 2; }
+  }
+  @container (max-height: 240px) {
+    .radio-stage .eq { display: none; }
+    .radio-stage .big-song { display: none; }
+  }
+  .dock { position: relative; z-index: 4; }
+  @media (max-width: 760px) {
+    .dock { gap: 10px; padding-top: 12px; }
+    .dock .info { gap: 2px; justify-items: center; }
+    .dock .title { font-size: 19px; }
+    .dock .sub { font-size: 13px; }
+    .dock .round { width: 54px; height: 54px; }
+    .dock .round.main { width: 68px; height: 68px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -770,8 +797,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v42",
-    versionName: "Textes longs bien affichés",
+    version: "v43",
+    versionName: "Lecteur adapté à l'iPhone",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
