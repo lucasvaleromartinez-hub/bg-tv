@@ -827,8 +827,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v45",
-    versionName: "Pochettes des chansons",
+    version: "v46",
+    versionName: "Pochettes : iTunes + Deezer",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1698,38 +1698,69 @@
     const x = norm(a).split(" ").filter((w) => w.length > 2), y = new Set(norm(b).split(" ").filter((w) => w.length > 2));
     return x.length > 0 && x.some((w) => y.has(w));
   }
-  async function itunes(term, country) {
-    const url = "https://itunes.apple.com/search?media=music&entity=song&limit=8&country=" + country + "&term=" + encodeURIComponent(term);
-    for (const u of [url, relay(url)].filter(Boolean)) {
-      try {
-        const res = await fetch(u, { signal: AbortSignal.timeout(7000) });
-        if (res.ok) return (await res.json()).results || [];
-      } catch {}
-    }
-    return [];
+  // JSONP : le navigateur charge la réponse comme un script, sans le blocage « CORS »
+  // que certains catalogues (iTunes, Deezer) imposent aux pages web.
+  function jsonp(url, ms = 7000) {
+    return new Promise((resolve, reject) => {
+      const cb = "__bgtv" + Math.random().toString(36).slice(2);
+      const script = document.createElement("script");
+      const done = () => { clearTimeout(timer); delete window[cb]; script.remove(); };
+      const timer = setTimeout(() => { done(); reject(new Error("délai dépassé")); }, ms);
+      window[cb] = (data) => { done(); resolve(data); };
+      script.onerror = () => { done(); reject(new Error("source injoignable")); };
+      script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + cb;
+      document.head.append(script);
+    });
   }
+
+  // Chaque source renvoie [{ artist, title, cover }] ; une erreur réseau est remontée (et rien n'est mémorisé).
+  async function itunes(term, country) {
+    const url = "https://itunes.apple.com/search?media=music&entity=song&limit=10&country=" + country + "&term=" + encodeURIComponent(term);
+    let data;
+    try { data = await jsonp(url); }
+    catch {
+      const res = await fetch(relay(url) || url, { signal: AbortSignal.timeout(7000) });
+      if (!res.ok) throw new Error("iTunes " + res.status);
+      data = await res.json();
+    }
+    return (data.results || []).map((r) => ({ artist: r.artistName, title: r.trackName, cover: (r.artworkUrl100 || "").replace(/100x100bb/, "600x600bb") }));
+  }
+  async function deezer(term) {
+    const data = await jsonp("https://api.deezer.com/search?output=jsonp&limit=10&q=" + encodeURIComponent(term));
+    return (data.data || []).map((r) => ({ artist: r.artist && r.artist.name, title: r.title, cover: r.album && (r.album.cover_xl || r.album.cover_big) }));
+  }
+
   async function findCover(raw) {
-    const cache = store.get("coverCache", {});
+    const cache = store.get("coverCache2", {});
     if (raw in cache) return cache[raw];
     const [artist, title] = songParts(raw);
-    let cover = "";
+    let cover = "", failed = false;
     if (artist && title) {
-      const plainTitle = title.replace(/\s*[([].*?[)\]]\s*/g, " ").trim();
-      const terms = [...new Set([`${artist} ${plainTitle}`, `${latin(artist)} ${latin(plainTitle)}`, `${latin(artist)}`])];
-      search:
-      for (const term of terms) {
-        for (const country of ["BG", "US"]) {
-          const results = await itunes(term, country);
-          const hit = results.find((r) => sameArtist(artist, r.artistName) && norm(r.trackName).split(" ").some((w) => w.length > 2 && norm(plainTitle).includes(w)))
-            || (term.endsWith(latin(artist)) ? null : results.find((r) => sameArtist(artist, r.artistName)));
-          if (hit && hit.artworkUrl100) { cover = hit.artworkUrl100.replace(/100x100bb/, "600x600bb"); break search; }
-        }
+      const plainTitle = title.replace(/\s*[([].*?[)\]]\s*/g, " ").replace(/\s+(feat|ft)\.?\s.*$/i, "").trim();
+      const titleWords = norm(plainTitle).split(" ").filter((w) => w.length > 1);
+      const pick = (results) => results.find((r) => r.cover && sameArtist(artist, r.artist) && titleWords.some((w) => norm(r.title).split(" ").includes(w)));
+      const searches = [
+        () => itunes(`${artist} ${plainTitle}`, "BG"),
+        () => deezer(`${artist} ${plainTitle}`),
+        () => itunes(`${artist} ${plainTitle}`, "US"),
+      ];
+      if (CYRILLIC.test(artist + plainTitle)) {
+        searches.push(() => deezer(`${latin(artist)} ${latin(plainTitle)}`), () => itunes(`${latin(artist)} ${latin(plainTitle)}`, "US"));
+      }
+      for (const search of searches) {
+        try {
+          const hit = pick(await search());
+          if (hit) { cover = hit.cover; break; }
+        } catch { failed = true; }
       }
     }
-    const keys = Object.keys(cache);
-    if (keys.length > 400) keys.slice(0, 150).forEach((k) => delete cache[k]);
-    cache[raw] = cover;
-    store.set("coverCache", cache);
+    // On ne retient « pas de pochette » que si toutes les sources ont vraiment répondu.
+    if (cover || !failed) {
+      const keys = Object.keys(cache);
+      if (keys.length > 400) keys.slice(0, 150).forEach((k) => delete cache[k]);
+      cache[raw] = cover;
+      store.set("coverCache2", cache);
+    }
     return cover;
   }
 
