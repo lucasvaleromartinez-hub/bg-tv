@@ -290,6 +290,8 @@
   .pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 999px; background: var(--deck-2); color: var(--text); font-weight: 800; font-size: 15px; text-decoration: none; }
   .pill.yt { color: #ff5c6c; }
   .clear-songs { margin-top: 24px; }
+  .toggle { display: flex; gap: 12px; align-items: center; font-size: 16px; }
+  .toggle input { width: 26px; height: 26px; min-height: 0; margin: 0; accent-color: var(--signal); flex: none; }
   .add-radio { display: flex; gap: 10px; align-items: center; }
   .add-radio input { flex: 1; min-width: 0; margin: 0; }
   .add-radio button { flex: none; min-height: 54px; padding: 0 22px; border-radius: 999px; background: var(--signal); color: var(--signal-ink); font-weight: 800; }
@@ -528,6 +530,10 @@
   </div>
   <p class="note">La vidéo ne s'affiche que voiture à l'arrêt : c'est la voiture qui l'impose.</p>
   <div class="check">
+    <h3>Titres des chansons</h3>
+    <label class="toggle"><input type="checkbox" id="frTitles"> Afficher les titres bulgares en français (artiste en lettres latines, titre traduit)</label>
+  </div>
+  <div class="check">
     <h3>Ajouter une radio</h3>
     <p class="note">Tapez le nom d'une radio, de n'importe quel pays. Elle arrive dans l'onglet Radio (« Mes ajouts ») et dans vos favoris.</p>
     <div class="add-radio">
@@ -728,8 +734,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v36",
-    versionName: "Style Apple Music",
+    version: "v37",
+    versionName: "Titres bulgares en français",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1017,10 +1023,19 @@
 
   const TAB_TITLES = { fav: "Mes favoris", tv: "Télévision", radio: "Radio", songs: "Titres entendus" };
 
-  function logSong(title, c) {
+  function logSong(title, c, original = title) {
     const last = state.songLog[0];
-    if (last && last.title === title && last.station === c.name) return;
-    state.songLog = [{ title, station: c.name, id: c.id, at: Date.now() }, ...state.songLog].slice(0, 150);
+    if (last && (last.original || last.title) === original && last.station === c.name) return;
+    state.songLog = [{ title, original, station: c.name, id: c.id, at: Date.now() }, ...state.songLog].slice(0, 150);
+    store.set("songLog", state.songLog);
+    if (state.tab === "songs" && $("player").classList.contains("open") === false) render();
+  }
+
+  // La traduction arrive après coup : on met à jour la ligne déjà notée dans l'historique.
+  function relabelSong(original, title) {
+    const entry = state.songLog.find((x) => x.original === original);
+    if (!entry) return;
+    entry.title = title;
     store.set("songLog", state.songLog);
     if (state.tab === "songs" && $("player").classList.contains("open") === false) render();
   }
@@ -1050,16 +1065,17 @@
       const row = el("div", "song-row");
       const time = el("time", null, new Date(x.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
       const what = el("div", "what");
-      what.append(el("div", "t", x.title), el("div", "st", x.station));
+      what.append(el("div", "t", x.title),
+        el("div", "st", (x.original && x.original !== x.title ? x.original + " · " : "") + x.station));
       const acts = el("div", "acts");
       const yt = el("a", "pill yt", "YouTube");
-      yt.href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(x.title);
+      yt.href = "https://www.youtube.com/results?search_query=" + encodeURIComponent(x.original || x.title);
       yt.target = "_blank";
       yt.rel = "noopener";
       const copy = el("button", "pill", "Copier");
       copy.onclick = async () => {
         let ok = false;
-        try { await navigator.clipboard.writeText(x.title); ok = true; } catch {}
+        try { await navigator.clipboard.writeText(x.original || x.title); ok = true; } catch {}
         copy.textContent = ok ? "Copié ✓" : "Impossible";
         setTimeout(() => (copy.textContent = "Copier"), 2000);
       };
@@ -1463,18 +1479,79 @@
     $("song").hidden = false;
   }
 
-  function setSong(title) {
-    title = (title || "").trim();
-    const changed = title !== state.song;
-    state.song = title;
+  // ---------- Titres bulgares en français ----------
+  // L'artiste est écrit en lettres latines (Галена → Galena), le titre est traduit (Обичам те → Je t'aime).
+  const CYRILLIC = /[\u0400-\u04FF]/;
+  const BG_LATIN = { а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m",
+    н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sht", ъ: "a",
+    ь: "y", ю: "yu", я: "ya", ё: "yo", э: "e", ы: "y", є: "ye", і: "i", ї: "yi", ґ: "g" };
+  function latin(text) {
+    return text.replace(/[\u0400-\u04FF]/g, (ch) => {
+      const low = ch.toLowerCase();
+      const t = BG_LATIN[low] ?? ch;
+      return ch === low ? t : t.charAt(0).toUpperCase() + t.slice(1);
+    });
+  }
+  const frOn = () => store.get("frTitles", true);
+  const needsFr = (raw) => frOn() && CYRILLIC.test(raw);
+  function splitSong(raw) {
+    const m = raw.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+    return m ? [m[1], m[2]] : [null, raw];
+  }
+  // Version immédiate, sans traduction : tout en lettres latines.
+  function quickFr(raw) {
+    if (!needsFr(raw)) return raw;
+    const [artist, title] = splitSong(raw);
+    return artist ? latin(artist) + " – " + latin(title) : latin(title);
+  }
+  async function translateBg(text) {
+    const cache = store.get("trCache", {});
+    if (cache[text]) return cache[text];
+    try {
+      const res = await fetch("https://api.mymemory.translated.net/get?langpair=bg|fr&q=" + encodeURIComponent(text),
+        { signal: AbortSignal.timeout(8000) });
+      const data = await res.json();
+      const out = String(data?.responseData?.translatedText || "").trim();
+      if (!out || /MYMEMORY WARNING|INVALID|QUERY LENGTH/i.test(out) || CYRILLIC.test(out)) return "";
+      const fixed = out.charAt(0).toUpperCase() + out.slice(1);
+      const keys = Object.keys(cache);
+      if (keys.length > 600) keys.slice(0, 200).forEach((k) => delete cache[k]);
+      cache[text] = fixed;
+      store.set("trCache", cache);
+      return fixed;
+    } catch { return ""; }
+  }
+  async function frenchSong(raw) {
+    const [artist, title] = splitSong(raw);
+    const tr = CYRILLIC.test(title) ? await translateBg(title) : title;
+    const t = tr || latin(title);
+    return artist ? latin(artist) + " – " + t : t;
+  }
+
+  function showSong(text) {
+    state.song = text;
     $("song").classList.remove("muted");
     for (const id of ["song", "miniSong"]) {
-      $(id).textContent = title ? "♪ " + title : "";
-      $(id).hidden = !title;
+      $(id).textContent = text ? "♪ " + text : "";
+      $(id).hidden = !text;
     }
-    if (changed) {
-      if (title && state.current) logSong(title, state.current);
-      updateMediaSession(); updatePlayer(); renderResume();
+  }
+
+  function setSong(raw) {
+    raw = (raw || "").trim();
+    const changed = raw !== state.songRaw;
+    state.songRaw = raw;
+    showSong(quickFr(raw));
+    if (!changed) return;
+    if (raw && state.current) logSong(state.song, state.current, raw);
+    updateMediaSession(); updatePlayer(); renderResume();
+    if (raw && needsFr(raw)) {
+      frenchSong(raw).then((fr) => {
+        if (state.songRaw !== raw || !fr || fr === state.song) return;
+        showSong(fr);
+        relabelSong(raw, fr);
+        updateMediaSession(); updatePlayer(); renderResume();
+      });
     }
   }
 
@@ -2089,6 +2166,13 @@
 
   $("settingsBtn").onclick = () => { renderSettings(); renderMyRadios(); $("settings").showModal(); };
   $("addRadioSearch").onclick = runRadioSearch;
+  $("frTitles").checked = frOn();
+  $("frTitles").onchange = () => {
+    store.set("frTitles", $("frTitles").checked);
+    const raw = state.songRaw;
+    state.songRaw = null;
+    if (raw) setSong(raw);
+  };
   $("addRadioQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") runRadioSearch(); });
   $("closeSettings").onclick = () => $("settings").close();
   $("checkBtn").onclick = () => checkAll("radio");
