@@ -566,7 +566,7 @@
   // Relais https (Netlify) : la page est en https, le navigateur refuse donc les flux en http.
   // Le relais va chercher le flux http et le renvoie en https.
   // Adresse du relais Cloudflare (Worker). Vide tant qu'il n'est pas en ligne.
-  const DEFAULT_RELAY = "";
+  const DEFAULT_RELAY = "https://bg-tv.lucasvaleromartinez.workers.dev";
   // On peut aussi le régler une fois en ouvrant la page avec ?relais=https://….workers.dev
   try {
     const p = new URLSearchParams(location.search).get("relais");
@@ -734,8 +734,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v37",
-    versionName: "Titres bulgares en français",
+    version: "v38",
+    versionName: "Relais Cloudflare branché",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
