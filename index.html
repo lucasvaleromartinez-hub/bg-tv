@@ -15,7 +15,7 @@
 <link rel="dns-prefetch" href="https://playerservices.streamtheworld.com">
 <link rel="preconnect" href="https://play.global.audio">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@500;700&display=swap">
+
 <style>
   /* Tableau de bord de voiture : rail de navigation à gauche (en bas sur téléphone),
      plaques de logos claires, numéros de chaîne, jaune « Pop » de la R5 comme seul accent. */
@@ -301,6 +301,130 @@
     .song-row { grid-template-columns: 1fr auto; }
     .song-row time { grid-column: 1 / -1; font-size: 13px; }
   }
+
+  /* ================= Thème « Apple Music » =================
+     Fond noir, barre latérale gris anthracite, pochettes carrées colorées en lignes,
+     rouge Apple Music comme seul accent, police du système. */
+  :root {
+    --ink: #000000;
+    --deck: #1c1c1e;
+    --deck-2: #2c2c2e;
+    --line: #38383a;
+    --text: #ffffff;
+    --muted: #98989f;
+    --signal: #fa2d48;
+    --signal-ink: #ffffff;
+    --live: #fa2d48;
+    --plate: #ffffff;
+    --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --rail: 248px;
+    --r-lg: 14px;
+    --r-md: 12px;
+  }
+  body { font-weight: 400; letter-spacing: -.01em; }
+
+  .rail { align-items: stretch; gap: 2px; padding-left: 16px; padding-right: 16px; background: var(--deck); border-right: 1px solid #000; }
+  .mark { grid-auto-flow: column; justify-content: start; align-items: center; gap: 10px; margin: 6px 10px 22px; }
+  .mark b { font: 700 22px/1 var(--font-display); letter-spacing: -.02em; }
+  .flag { width: 30px; height: 22px; border-radius: 5px; }
+  .nav { width: auto; min-height: 50px; padding: 0 14px; border-radius: 10px; grid-auto-flow: column; justify-content: start; align-items: center; gap: 14px; font-size: 18px; font-weight: 600; color: var(--text); }
+  .nav .ic { width: 24px; height: 24px; color: var(--signal); }
+  .nav[aria-selected="true"] { background: var(--deck-2); color: var(--text); }
+
+  .top h1 { font: 700 34px/1.1 var(--font-display); letter-spacing: -.02em; }
+  .search { background: var(--deck); border: 0; border-radius: 12px; min-height: 48px; }
+
+  .section-head { justify-content: space-between; align-items: center; margin: 30px 0 12px; }
+  .section-head h2 { font: 700 24px/1.2 var(--font-display); letter-spacing: -.02em; }
+  .section-head .count { color: var(--muted); font-size: 15px; margin-right: auto; margin-left: 10px; }
+  .see-all { color: var(--signal); font-size: 17px; font-weight: 600; }
+
+  /* Lignes de pochettes à faire défiler, comme l'accueil d'Apple Music. */
+  .row {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 176px; gap: 18px;
+    overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity;
+    padding-bottom: 6px; margin-right: -28px; padding-right: 28px; scrollbar-width: none;
+  }
+  .row::-webkit-scrollbar { display: none; }
+  .row .tile { scroll-snap-align: start; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 22px 18px; }
+
+  .tile { background: none; border: 0; padding: 0; gap: 8px; border-radius: 0; }
+  .tile:active { transform: scale(.97); background: none; }
+  .tile.playing { box-shadow: none; }
+  .tile.playing .art { box-shadow: 0 0 0 3px var(--signal), 0 10px 24px rgba(0,0,0,.5); }
+  .tile .name { font-weight: 600; font-size: 16px; padding: 0; -webkit-line-clamp: 1; }
+  .tile .sub { color: var(--muted); font-size: 14px; margin-top: -4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .star { top: 10px; right: 10px; color: #fff; filter: drop-shadow(0 1px 3px rgba(0,0,0,.6)); }
+
+  /* Pochette : dégradé de couleur propre à chaque chaîne, logo ou nom par-dessus. */
+  .art {
+    position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden;
+    background: linear-gradient(135deg, var(--a, #fa2d48), var(--b, #ff9500));
+    display: grid; place-items: center; box-shadow: 0 10px 24px rgba(0,0,0,.45);
+    container-type: inline-size;
+  }
+  .art .word { padding: 8%; text-align: center; font: 800 13cqw/1.05 var(--font-display); letter-spacing: -.02em; text-transform: uppercase; overflow-wrap: normal; word-break: normal; color: var(--fg, #fff); }
+  .art .logo { width: 70%; height: 70%; border-radius: 18%; background: #fff; display: grid; place-items: center; padding: 10%; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  .art .logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .skeleton { height: auto; aspect-ratio: 1; border-radius: 12px; }
+
+  .check-cta { background: var(--deck); color: var(--signal); font-size: 16px; font-weight: 600; padding: 12px 18px; }
+  .back-link { color: var(--signal); font-size: 17px; font-weight: 600; margin: 4px 0 6px; }
+
+  /* Carte « Reprendre » */
+  .resume { grid-template-columns: 120px 1fr auto; background: var(--deck); border: 0; border-radius: 16px; padding: 16px; }
+  .resume .art { width: 120px; }
+  .resume .eyebrow { color: var(--signal); letter-spacing: .06em; }
+  .resume .name { font: 700 28px/1.1 var(--font-display); letter-spacing: -.02em; }
+  .resume .go { background: var(--signal); color: #fff; }
+
+  /* Mini-lecteur */
+  .mini { background: rgba(44,44,46,.82); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); border: 0; border-radius: 16px; padding: 10px 14px 10px 10px; gap: 14px; }
+  .mini .art { width: 58px; flex: none; border-radius: 8px; box-shadow: none; }
+  .mini .art .logo { width: 80%; height: 80%; }
+  .mini .title { font-weight: 600; }
+  .mini .song { color: var(--muted); font-weight: 400; }
+  .mini .onair { font-size: 11px; }
+  .round { background: none; }
+  .round.main { background: none; color: #fff; }
+  .round.ghost { color: #fff; }
+  .mini .round { width: 52px; height: 52px; }
+
+  .song { color: var(--signal); font-weight: 600; }
+
+  /* Écran « À l'écoute » */
+  .radio-stage { background: linear-gradient(160deg, var(--a, #3a1020), #000 75%); }
+  .radio-stage .wrap { gap: 26px; }
+  .radio-stage .art { width: min(360px, 44vh); box-shadow: 0 30px 80px rgba(0,0,0,.6); border-radius: 16px; }
+  .radio-stage .big-song { font: 700 clamp(22px, 3vw, 34px)/1.2 var(--font-display); letter-spacing: -.02em; }
+  .eq i { background: #fff; }
+  .dock { background: #111; border-top: 0; }
+  .dock .title { font: 700 22px/1.15 var(--font-display); letter-spacing: -.02em; }
+  .dock .round { background: none; color: #fff; }
+  .dock .round.main { width: 76px; height: 76px; background: #fff; color: #000; }
+  .dock .round.fav[aria-pressed="true"] { color: var(--signal); }
+
+  dialog { background: var(--deck); border: 0; }
+  dialog .row { display: flex; grid-auto-flow: initial; overflow: visible; margin-right: 0; padding-right: 0; }
+  dialog .row button.primary, .add-radio button, .message button { background: var(--signal); color: #fff; }
+  .pill { background: var(--deck-2); }
+
+  @media (max-width: 760px) {
+    :root { --rail: 0px; }
+    .rail { padding: 6px 4px max(6px, env(safe-area-inset-bottom, 0px)); background: rgba(28,28,30,.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid #000; }
+    .nav { grid-auto-flow: row; justify-items: center; gap: 4px; padding: 0; font-size: 11px; font-weight: 500; color: var(--muted); }
+    .nav[aria-selected="true"] { background: none; color: var(--signal); }
+    .nav .ic { color: inherit; }
+    .top h1 { font-size: 30px; }
+    .row { grid-auto-columns: 148px; gap: 14px; margin-right: -16px; padding-right: 16px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 18px 14px; }
+    .resume { grid-template-columns: 84px 1fr; }
+    .resume .art { width: 84px; }
+    .resume .go { border-radius: 999px; }
+    .mini .round.ghost { display: none; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -354,7 +478,9 @@
     <span class="song" id="miniSong" hidden></span>
     <span class="onair" id="miniLive">En direct</span>
   </button>
+  <button class="round ghost" id="miniPrev" aria-label="Chaîne précédente"><svg class="ic fill"><use href="#i-prev"/></svg></button>
   <button class="round main" id="miniPlay" aria-label="Lecture / pause"><svg class="ic fill"><use href="#i-play"/></svg></button>
+  <button class="round ghost" id="miniNext" aria-label="Chaîne suivante"><svg class="ic fill"><use href="#i-next"/></svg></button>
 </div>
 
 <section class="player" id="player" aria-label="Lecteur">
@@ -511,6 +637,15 @@
   const linkKey = (u) => (u || "").replace(/^https?:\/\//i, "");
   const EXTRA_RADIO = [
     {
+      // ESC Radio (escradio.com) : la radio de l'Eurovision, 24 h/24. Liens du site officiel ;
+      // d'autres liens sont ajoutés au chargement depuis l'annuaire radio-browser.
+      id: "extra:escradio", kind: "radio", group: "Mes ajouts", logo: "",
+      name: "ESC Radio",
+      url: candidates("http://icepool.silvacast.com/ESCRADIO.mp3")[0],
+      alts: candidates("http://icepool.silvacast.com/ESCRADIO.mp3", "http://stream.escradio.com:8030/").slice(1),
+      lookup: "ESC Radio"
+    },
+    {
       // Galgalatz (Tsahal), la radio des hits israéliens : flux publics bynetcdn.
       id: "extra:galgalatz", kind: "radio", group: "Israël · Pop", logo: "",
       name: "Galgalatz",
@@ -593,8 +728,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v35",
-    versionName: "Titres, récents et ajout de radios",
+    version: "v36",
+    versionName: "Style Apple Music",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -610,6 +745,11 @@
   const $ = (id) => document.getElementById(id);
 
   // Une seule fois : Fen TV et Radio Veronika arrivent dans les favoris.
+  if (!store.get("seededEsc", false)) {
+    state.favorites.add("extra:escradio");
+    store.set("favorites", [...state.favorites]);
+    store.set("seededEsc", true);
+  }
   if (!store.get("seededExtras4", false)) {
     ["extra:njoy", "extra:darik", "extra:balkanika-radio", "extra:planeta-radio", "extra:planeta-live"].forEach((id) => state.favorites.add(id));
     store.set("favorites", [...state.favorites]);
@@ -841,6 +981,7 @@
     state.errors = [];
     render();
     await Promise.all([loadTV(), loadRadio()]);
+    enrichFromDirectory();
     state.loading = false;
     render();
     allChannels().filter((c) => state.favorites.has(c.id)).slice(0, 12).forEach(warm);
@@ -853,6 +994,24 @@
   }
 
   const allChannels = () => [...state.tv, ...state.radio];
+
+  // Radios ajoutées à la main avec « lookup » : l'annuaire donne des liens plus récents, gardés en secours.
+  async function enrichFromDirectory() {
+    for (const c of EXTRA_RADIO.filter((x) => x.lookup)) {
+      for (const server of RADIO_SERVERS) {
+        try {
+          const res = await fetch(server + "/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=5&name="
+            + encodeURIComponent(c.lookup), { signal: AbortSignal.timeout(8000) });
+          if (!res.ok) continue;
+          const found = await res.json();
+          const extra = found.flatMap((s) => candidates(s.url_resolved, s.url));
+          c.alts = [...new Set([...(c.alts || []), ...extra])].filter((u) => u !== c.url);
+          if (!c.logo) c.logo = ((found.find((s) => s.favicon) || {}).favicon || "").replace(/^http:\/\//i, "https://");
+          break;
+        } catch {}
+      }
+    }
+  }
 
   // ---------- Affichage de la liste ----------
 
@@ -963,7 +1122,7 @@
 
     if (state.loading) {
       const grid = el("div", "grid");
-      for (let i = 0; i < 10; i++) grid.append(el("div", "skeleton"));
+      for (let i = 0; i < 12; i++) grid.append(el("div", "skeleton"));
       list.append(grid);
       return;
     }
@@ -1010,12 +1169,30 @@
         sections.push(["Hors service (dernier test)", dead]);
       }
     }
+    // « Tout voir » : une seule catégorie, en grille.
+    if (state.expanded && !q) {
+      const only = sections.find(([name]) => name === state.expanded);
+      if (only) {
+        const back = el("button", "back-link", "‹ Retour");
+        back.onclick = () => { state.expanded = null; render(); window.scrollTo({ top: 0 }); };
+        list.append(back);
+        sections = [only];
+      } else {
+        state.expanded = null;
+      }
+    }
+    const asGrid = !!q || !!state.expanded;
     for (const [name, items] of sections) {
       const head = el("div", "section-head");
-      head.append(el("h2", null, name), el("span", null, items.length + (items.length > 1 ? " chaînes" : " chaîne")));
-      const grid = el("div", "grid");
-      for (const c of items) grid.append(tile(c, items, ++number));
-      list.append(head, grid);
+      head.append(el("h2", null, name), el("span", "count", String(items.length)));
+      if (!asGrid && items.length > 5) {
+        const all = el("button", "see-all", "Tout voir");
+        all.onclick = () => { state.expanded = name; render(); window.scrollTo({ top: 0 }); };
+        head.append(all);
+      }
+      const box = el("div", asGrid ? "grid" : "row");
+      for (const c of items) box.append(tile(c, items, ++number));
+      list.append(head, box);
     }
   }
 
@@ -1033,12 +1210,50 @@
     go.setAttribute("aria-label", "Ouvrir " + c.name);
     go.append(icon("play", "ic fill"));
     go.onclick = () => (state.playing ? openPlayer() : play(c));
-    card.append(plate(c), text, go);
+    card.append(art(c), text, go);
     box.append(card);
   }
 
   function kindLabel(c) {
     return c.kind === "radio" ? "Radio" : c.kind === "youtube" ? "YouTube" : "TV";
+  }
+
+  // Pochette façon Apple Music : un dégradé propre à chaque chaîne (calculé depuis son nom),
+  // avec le logo sur une plaque blanche s'il existe, sinon le nom en grand.
+  const PALETTE = [
+    ["#fa2d48", "#ff9500"], ["#5856d6", "#af52de"], ["#0a84ff", "#64d2ff"], ["#30d158", "#0a7d3b"],
+    ["#ffd60a", "#ff9f0a", "#1a1300"], ["#bf5af2", "#ff375f"], ["#ff453a", "#ff9f0a"], ["#64d2ff", "#5e5ce6"],
+    ["#ff9f0a", "#ffd60a", "#1a1300"], ["#30d158", "#64d2ff"], ["#ff375f", "#5856d6"], ["#ac8e68", "#3a2a18"]
+  ];
+  function colors(c) {
+    let h = 0;
+    for (const ch of c.name) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    return PALETTE[h % PALETTE.length];
+  }
+  function shortName(name) {
+    return name.replace(/^(radio|радио)\s+/i, "").replace(/\s*·\s*(direct|clips|son)$/i, "").replace(/\s*\(.*?\)\s*/g, " ").trim() || name;
+  }
+  function art(c) {
+    const box = el("div", "art");
+    const [a, b, fg] = colors(c);
+    box.style.setProperty("--a", a);
+    box.style.setProperty("--b", b);
+    if (fg) box.style.setProperty("--fg", fg);
+    const word = () => { box.innerHTML = ""; box.append(el("span", "word", shortName(c.name))); };
+    if (c.logo) {
+      const logo = el("div", "logo");
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.src = c.logo;
+      img.onerror = word;
+      logo.append(img);
+      box.append(logo);
+    } else {
+      word();
+    }
+    return box;
   }
 
   function plate(c) {
@@ -1065,10 +1280,7 @@
   function tile(c, queue, number) {
     const b = el("button", "tile" + (state.current && state.current.id === c.id ? " playing" : ""));
     b.setAttribute("aria-label", `${c.name}, ${kindLabel(c)}`);
-    const meta = el("div", "meta");
-    meta.append(el("span", "num", "CH " + String(number).padStart(2, "0")));
-    meta.append(el("span", "badge" + (c.kind === "youtube" ? " yt" : ""), kindLabel(c)));
-    b.append(plate(c), el("span", "name", c.name), meta);
+    b.append(art(c), el("span", "name", c.name), el("span", "sub", kindLabel(c) + " · " + c.group));
     if (state.favorites.has(c.id)) {
       const star = el("span", "star");
       star.append(icon("star", "ic fill"));
@@ -1400,7 +1612,45 @@
     play(next, state.queue);
   }
 
+  // Une radio qui échoue deux fois de suite disparaît de l'onglet Radio ; une qui démarre est réhabilitée.
+  function noteFailure(c) {
+    const fails = store.get("streamFails", {});
+    fails[c.id] = (fails[c.id] || 0) + 1;
+    store.set("streamFails", fails);
+    if (fails[c.id] >= 2 && !c.id.startsWith("extra:")) {
+      const status = store.get("streamStatus", {});
+      status[c.id] = false;
+      store.set("streamStatus", status);
+    }
+  }
+
+  function noteSuccess(c) {
+    state.autoSkips = 0;
+    const fails = store.get("streamFails", {});
+    if (fails[c.id]) { delete fails[c.id]; store.set("streamFails", fails); }
+    const status = store.get("streamStatus", {});
+    if (status[c.id] === false) { status[c.id] = true; store.set("streamStatus", status); }
+  }
+
   function showError() {
+    const c = state.current;
+    if (c && c.kind === "radio") {
+      noteFailure(c);
+      // On passe tout seul à la radio suivante (5 fois de suite au plus, au cas où la connexion serait coupée).
+      if (state.queue.length > 1 && (state.autoSkips || 0) < 5) {
+        state.autoSkips = (state.autoSkips || 0) + 1;
+        const m = $("message");
+        m.innerHTML = "";
+        m.append(el("div", null, c.name + " ne répond pas. Radio suivante…"));
+        const stay = el("button", null, "Rester sur celle-ci");
+        m.append(stay);
+        m.classList.add("show");
+        const timer = setTimeout(() => { if (state.current === c) zap(1); }, 2500);
+        stay.onclick = () => { clearTimeout(timer); hideMessage(); };
+        render();
+        return;
+      }
+    }
     const m = $("message");
     m.innerHTML = "";
     m.append(el("div", null, state.current && state.current.kind === "radio"
@@ -1497,6 +1747,7 @@
 
   function setPlaying(playing) {
     state.playing = playing;
+    if (playing && state.current && state.current.kind === "radio") noteSuccess(state.current);
     if (playing) state.wantPlay = true;
     if ("mediaSession" in navigator) { try { navigator.mediaSession.playbackState = playing ? "playing" : "paused"; } catch {} }
     updatePlayer();
@@ -1523,7 +1774,7 @@
     if (!active) state.current = c;
     $("miniTitle").textContent = c.name;
     const logo = $("miniLogo");
-    logo.replaceWith(Object.assign(plate(c), { id: "miniLogo" }));
+    logo.replaceWith(Object.assign(art(c), { id: "miniLogo" }));
     $("miniLive").hidden = !state.playing;
     setPlayIcon($("miniPlay"));
     $("mini").hidden = false;
@@ -1551,8 +1802,9 @@
     $("player").classList.toggle("audio-only", !!c.audioOnly);
     $("player").classList.toggle("paused", !state.playing);
     if (asRadio && $("radioLogo").dataset.id !== c.id) {
-      $("radioLogo").replaceWith(Object.assign(plate(c), { id: "radioLogo" }));
+      $("radioLogo").replaceWith(Object.assign(art(c), { id: "radioLogo" }));
       $("radioLogo").dataset.id = c.id;
+      $("radioStage").style.setProperty("--a", colors(c)[0]);
     }
     $("bigSong").textContent = state.song || c.name;
   }
@@ -1804,6 +2056,7 @@
   // ---------- Événements ----------
 
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => {
+    state.expanded = null;
     state.tab = t.dataset.tab;
     store.set("tab", state.tab);
     render();
@@ -1812,6 +2065,8 @@
   $("search").addEventListener("input", (e) => { state.query = e.target.value; render(); });
 
   $("closeBtn").onclick = closePlayer;
+  $("miniPrev").onclick = () => zap(-1);
+  $("miniNext").onclick = () => zap(1);
   $("playBtn").onclick = togglePlay;
   $("prevBtn").onclick = () => zap(-1);
   $("nextBtn").onclick = () => zap(1);
