@@ -498,6 +498,19 @@
   @container (max-height: 360px) {
     .radio-stage .big-song .line { -webkit-line-clamp: 1; }
   }
+
+  /* ---------- Pochettes des chansons ---------- */
+  .art.cover { background: #222; }
+  .art.cover img { width: 100%; height: 100%; object-fit: cover; display: block; animation: fadein .4s ease; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  .song-row { grid-template-columns: 72px 1fr auto; }
+  .song-row .when { display: grid; justify-items: start; gap: 6px; }
+  .song-row .cv { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; }
+  @media (max-width: 760px) {
+    .song-row { grid-template-columns: 1fr; }
+    .song-row .when { grid-auto-flow: column; justify-content: start; align-items: center; gap: 10px; }
+    .song-row .cv { width: 48px; height: 48px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -814,8 +827,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v44",
-    versionName: "Radio, artiste, titre",
+    version: "v45",
+    versionName: "Pochettes des chansons",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1167,7 +1180,14 @@
       const label = dayLabel(x.at);
       if (label !== day) { day = label; box.append(el("div", "song-day", label)); }
       const row = el("div", "song-row");
-      const time = el("time", null, new Date(x.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }));
+      const time = el("div", "when");
+      if (x.cover) {
+        const img = document.createElement("img");
+        img.className = "cv"; img.alt = ""; img.loading = "lazy"; img.src = x.cover;
+        img.onerror = () => img.remove();
+        time.append(img);
+      }
+      time.append(el("time", null, new Date(x.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })));
       const what = el("div", "what");
       what.append(el("div", "t", x.title),
         el("div", "st", (x.original && x.original !== x.title ? x.original + " · " : "") + x.station));
@@ -1428,6 +1448,7 @@
     state.current = c;
     state.queue = queue.length ? queue : [c];
     store.set("last", c.id);
+    state.cover = "";
     state.recent = [c.id, ...state.recent.filter((id) => id !== c.id)].slice(0, 10);
     store.set("recent", state.recent);
     hideMessage();
@@ -1669,6 +1690,75 @@
     $("miniSong").hidden = !text;
   }
 
+  // ---------- Pochette de la chanson en cours ----------
+  // Cherchée dans le catalogue public iTunes / Apple Music (gratuit, sans compte).
+  // On ne garde une pochette que si l'artiste trouvé correspond : mieux vaut aucune image qu'une fausse.
+  const norm = (t) => latin(String(t || "")).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  function sameArtist(a, b) {
+    const x = norm(a).split(" ").filter((w) => w.length > 2), y = new Set(norm(b).split(" ").filter((w) => w.length > 2));
+    return x.length > 0 && x.some((w) => y.has(w));
+  }
+  async function itunes(term, country) {
+    const url = "https://itunes.apple.com/search?media=music&entity=song&limit=8&country=" + country + "&term=" + encodeURIComponent(term);
+    for (const u of [url, relay(url)].filter(Boolean)) {
+      try {
+        const res = await fetch(u, { signal: AbortSignal.timeout(7000) });
+        if (res.ok) return (await res.json()).results || [];
+      } catch {}
+    }
+    return [];
+  }
+  async function findCover(raw) {
+    const cache = store.get("coverCache", {});
+    if (raw in cache) return cache[raw];
+    const [artist, title] = songParts(raw);
+    let cover = "";
+    if (artist && title) {
+      const plainTitle = title.replace(/\s*[([].*?[)\]]\s*/g, " ").trim();
+      const terms = [...new Set([`${artist} ${plainTitle}`, `${latin(artist)} ${latin(plainTitle)}`, `${latin(artist)}`])];
+      search:
+      for (const term of terms) {
+        for (const country of ["BG", "US"]) {
+          const results = await itunes(term, country);
+          const hit = results.find((r) => sameArtist(artist, r.artistName) && norm(r.trackName).split(" ").some((w) => w.length > 2 && norm(plainTitle).includes(w)))
+            || (term.endsWith(latin(artist)) ? null : results.find((r) => sameArtist(artist, r.artistName)));
+          if (hit && hit.artworkUrl100) { cover = hit.artworkUrl100.replace(/100x100bb/, "600x600bb"); break search; }
+        }
+      }
+    }
+    const keys = Object.keys(cache);
+    if (keys.length > 400) keys.slice(0, 150).forEach((k) => delete cache[k]);
+    cache[raw] = cover;
+    store.set("coverCache", cache);
+    return cover;
+  }
+
+  function coverArt(url, c) {
+    const box = el("div", "art cover");
+    const img = document.createElement("img");
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+    img.onerror = () => box.replaceWith(Object.assign(art(c), { id: box.id }));
+    box.append(img);
+    return box;
+  }
+
+  // Pochette de la chanson si on l'a, sinon celle de la radio (lecteur, mini-lecteur).
+  function refreshArtwork() {
+    const c = state.current;
+    if (!c) return;
+    const key = c.id + "|" + (state.cover || "");
+    for (const id of ["radioLogo", "miniLogo"]) {
+      const node = $(id);
+      if (!node || node.dataset.key === key) continue;
+      const fresh = Object.assign(state.cover ? coverArt(state.cover, c) : art(c), { id });
+      fresh.dataset.key = key;
+      fresh.dataset.id = c.id;
+      node.replaceWith(fresh);
+    }
+  }
+
   function setSong(raw) {
     raw = (raw || "").trim();
     const changed = raw !== state.songRaw;
@@ -1676,7 +1766,20 @@
     showSong(quickFr(raw));
     if (!changed) return;
     if (raw && state.current) logSong(state.song, state.current, raw);
+    state.cover = "";
+    refreshArtwork();
     updateMediaSession(); updatePlayer(); renderResume();
+    if (raw) {
+      findCover(raw).then((cover) => {
+        if (state.songRaw !== raw || !cover) return;
+        state.cover = cover;
+        const entry = state.songLog.find((x) => x.original === raw);
+        if (entry) { entry.cover = cover; store.set("songLog", state.songLog); }
+        refreshArtwork();
+        updateMediaSession();
+        if (state.tab === "songs" && !$("player").classList.contains("open")) render();
+      });
+    }
     if (raw && needsFr(raw)) {
       frenchSong(raw).then((fr) => {
         if (state.songRaw !== raw || !fr || fr === state.song) return;
@@ -2018,6 +2121,7 @@
     $("miniTitle").textContent = c.name;
     const logo = $("miniLogo");
     logo.replaceWith(Object.assign(art(c), { id: "miniLogo" }));
+    refreshArtwork();
     $("miniLive").hidden = !state.playing;
     setPlayIcon($("miniPlay"));
     $("mini").hidden = false;
@@ -2051,6 +2155,7 @@
       $("radioLogo").dataset.id = c.id;
       $("radioStage").style.setProperty("--a", colors(c)[0]);
     }
+    if (asRadio) refreshArtwork();
     if (state.song) fillSongLines($("bigSong"), state.song);
     else $("bigSong").textContent = c.name;
   }
@@ -2071,7 +2176,7 @@
     navigator.mediaSession.metadata = new MediaMetadata({
       title: state.song || c.name,
       artist: state.song ? c.name : "BG TV · en direct",
-      artwork: c.logo ? [{ src: c.logo, sizes: "512x512" }] : []
+      artwork: state.cover ? [{ src: state.cover, sizes: "600x600", type: "image/jpeg" }] : c.logo ? [{ src: c.logo, sizes: "512x512" }] : []
     });
     const handlers = {
       play: togglePlay,
