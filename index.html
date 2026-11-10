@@ -530,6 +530,10 @@
   </div>
   <p class="note">La vidéo ne s'affiche que voiture à l'arrêt : c'est la voiture qui l'impose.</p>
   <div class="check">
+    <h3>Son</h3>
+    <label class="toggle"><input type="checkbox" id="levelOn"> Volume égal entre les radios (pratique en voiture, mais le son est un peu plus compressé)</label>
+  </div>
+  <div class="check">
     <h3>Titres des chansons</h3>
     <label class="toggle"><input type="checkbox" id="frTitles"> Afficher les titres bulgares en français (artiste en lettres latines, titre traduit)</label>
   </div>
@@ -739,8 +743,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v40",
-    versionName: "Titres partout",
+    version: "v41",
+    versionName: "Son naturel, meilleure qualité",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -799,8 +803,9 @@
       const source = ctx.createMediaElementSource(leveled);
       const gain = ctx.createGain();
       const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 3.5;
-      comp.attack.value = 0.01; comp.release.value = 0.4;
+      // Réglage doux : il égalise le volume sans écraser la musique.
+      comp.threshold.value = -12; comp.knee.value = 10; comp.ratio.value = 2;
+      comp.attack.value = 0.02; comp.release.value = 0.5;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 2048;
       source.connect(gain).connect(comp).connect(ctx.destination);
@@ -829,7 +834,7 @@
       const rms = Math.sqrt(sum / data.length) / level.value;
       if (rms < 0.004) return; // silence ou blanc entre deux titres : on ne touche à rien
       smooth = smooth ? smooth * 0.9 + rms * 0.1 : rms;
-      const wanted = Math.min(4, Math.max(0.4, TARGET_RMS / smooth));
+      const wanted = Math.min(2.5, Math.max(0.4, TARGET_RMS / smooth));
       level.value += (wanted - level.value) * 0.15;
       level.gain.gain.setTargetAtTime(level.value, level.ctx.currentTime, 0.5);
       if (--saveIn <= 0) {
@@ -941,15 +946,16 @@
             const urls = candidates(s.url_resolved, s.url);
             return {
               id: s.url_resolved, src: s.url_resolved, url: urls[0], alts: urls.slice(1),
-              kind: "radio", hls: s.hls === 1,
+              kind: "radio", hls: s.hls === 1, bitrate: s.bitrate || 0, codec: s.codec || "",
               name: s.name.trim(), logo: s.favicon || "",
               group: s._il
                 ? /galgalatz|glgltz|גלגלצ|eco ?99|אקו 99|102 ?fm|tel aviv 102|רדיו תל אביב|kan gimel|כאן גימל|100fm|radius|רדיוס/i.test(s.name) ? "Israël · Pop" : (/mizrahi|oriental|mediterr|מזרחי|ים תיכוני/i.test(s.tags + " " + s.name) ? "Israël · Mizrahi" : "Israël")
                 : /chalga|чалга|folk|фолк/i.test(s.tags) ? "Chalga & folk" : "Radios"
             };
           }));
-        state.radio = withMine(list);
-        store.set("radioCache2", list);
+        const best = bestQuality(list);
+        state.radio = withMine(best);
+        store.set("radioCache2", best);
         return;
       } catch (e) {
         state.lastRadioError = e.message;
@@ -977,6 +983,28 @@
     const mine = myRadioChannels();
     const ids = new Set(mine.map((c) => c.id));
     return [...EXTRA_RADIO, ...mine, ...list.filter((c) => !ids.has(c.id))];
+  }
+
+  // Une même radio apparaît souvent plusieurs fois dans l'annuaire (64, 128, 320 kbit/s…) :
+  // on garde la meilleure qualité, les autres liens servent de secours.
+  function bestQuality(list) {
+    const key = (c) => c.group + "|" + c.name.toLowerCase()
+      .replace(/^(radio|радио)\s+/, "")
+      .replace(/\b(hd|hq|low|high|mobile|aac\+?|mp3|ogg|opus|(32|48|64|96|128|160|192|256|320)\s?(k|kbps|kbit\/s)?)\b/g, "")
+      .replace(/[^\p{L}\p{N}]+/gu, "");
+    const groups = new Map();
+    for (const c of list) {
+      const k = key(c);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(c);
+    }
+    return [...groups.values()].map((g) => {
+      if (g.length === 1) return g[0];
+      g.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+      const [top, ...rest] = g;
+      return { ...top, aliases: g.map((x) => x.id),
+        alts: [...new Set([...(top.alts || []), ...rest.flatMap((x) => [x.url, ...(x.alts || [])])])].filter((u) => u !== top.url) };
+    });
   }
 
   function dedupe(list) {
@@ -1152,7 +1180,7 @@
     if (state.tab === "songs") { renderSongs(list, q); return; }
 
     let channels = state.tab === "fav"
-      ? allChannels().filter((c) => state.favorites.has(c.id))
+      ? allChannels().filter((c) => state.favorites.has(c.id) || (c.aliases || []).some((id) => state.favorites.has(id)))
       : state.tab === "radio" ? state.radio : state.tv;
     if (q) channels = channels.filter((c) => c.name.toLowerCase().includes(q));
 
@@ -1409,7 +1437,7 @@
     // Radio via le relais → lecteur avec volume automatique ; sinon le lecteur normal.
     // Radio : toujours un lecteur audio (un lecteur vidéo est coupé par iOS écran verrouillé).
     // Sur iPhone, pas de réglage de volume : Web Audio s'arrête quand l'écran se verrouille.
-    const target = c.kind === "radio" ? (isRelayed(url) && !IOS ? leveled : plainAudio) : video;
+    const target = c.kind === "radio" ? (isRelayed(url) && !IOS && store.get("levelOn", false) ? leveled : plainAudio) : video;
     if (target !== media) { media.pause(); if (media.getAttribute("src")) { media.removeAttribute("src"); media.load(); } }
     media = target;
     if (media === leveled) startLeveling(c);
@@ -1900,7 +1928,8 @@
     const c = state.current;
     if (!c) return;
     $("title").textContent = c.name;
-    $("sub").textContent = kindLabel(c) + (c.kind === "youtube" ? " officiel" : "") + " · " + c.group;
+    $("sub").textContent = kindLabel(c) + (c.kind === "youtube" ? " officiel" : "") + " · " + c.group
+      + (c.bitrate ? ` · ${c.codec ? c.codec + " " : ""}${c.bitrate} kbit/s` : "");
     $("liveTag").hidden = c.id === "extra:fentv-clips";
     $("playBtn").hidden = c.kind === "youtube";
     $("favBtn").setAttribute("aria-pressed", state.favorites.has(c.id));
@@ -2199,6 +2228,11 @@
 
   $("settingsBtn").onclick = () => { renderSettings(); renderMyRadios(); $("settings").showModal(); };
   $("addRadioSearch").onclick = runRadioSearch;
+  $("levelOn").checked = store.get("levelOn", false);
+  $("levelOn").onchange = () => {
+    store.set("levelOn", $("levelOn").checked);
+    if (state.current && state.current.kind === "radio" && state.playing) play(state.current);
+  };
   $("frTitles").checked = frOn();
   $("frTitles").onchange = () => {
     store.set("frTitles", $("frTitles").checked);
