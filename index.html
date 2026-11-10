@@ -427,6 +427,33 @@
     .resume .go { border-radius: 999px; }
     .mini .round.ghost { display: none; }
   }
+
+  /* ---------- Textes longs : rien ne déborde ni ne se chevauche ---------- */
+  .art .word { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; max-width: 100%; max-height: 92%; }
+  .art .word.long { font-size: 10cqw; }
+  .tile .name, .tile .sub { min-width: 0; max-width: 100%; }
+  .section-head h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .section-head .see-all { flex: none; }
+  .resume > div:nth-child(2) { min-width: 0; }
+  .resume .name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .resume .song, .resume .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini .text > * { max-width: 100%; }
+  .dock .info > * { min-width: 0; max-width: 100%; }
+  .dock .song, .dock .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .radio-stage { overflow: hidden; }
+  .radio-stage .wrap { max-width: min(900px, 92vw); max-height: 100%; }
+  .radio-stage .art { width: min(360px, 36vh, 70vw); flex: none; }
+  .radio-stage .big-song { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .song-row .t { overflow-wrap: anywhere; }
+  .song-row .st { overflow-wrap: anywhere; }
+  .lists li span { min-width: 0; }
+  @media (max-width: 760px) {
+    .radio-stage .wrap { gap: 16px; }
+    .radio-stage .big-song { font-size: clamp(18px, 5.2vw, 24px); }
+    .song-row { grid-template-columns: 1fr; gap: 8px; }
+    .song-row time { grid-column: auto; }
+    .song-row .acts { justify-content: flex-start; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -743,8 +770,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v41",
-    versionName: "Son naturel, meilleure qualité",
+    version: "v42",
+    versionName: "Textes longs bien affichés",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1288,7 +1315,15 @@
     box.style.setProperty("--a", a);
     box.style.setProperty("--b", b);
     if (fg) box.style.setProperty("--fg", fg);
-    const word = () => { box.innerHTML = ""; box.append(el("span", "word", shortName(c.name))); };
+    const word = () => {
+      box.innerHTML = "";
+      // Sur la pochette : 3 mots au plus (le nom complet est écrit en dessous).
+      const parts = shortName(c.name).split(/\s+/);
+      let text = parts[0];
+      for (const w of parts.slice(1, 3)) { if ((text + " " + w).length > 20) break; text += " " + w; }
+      const longest = Math.max(...text.split(" ").map((w) => w.length));
+      box.append(el("span", "word" + (longest > 9 ? " long" : ""), text));
+    };
     if (c.logo) {
       const logo = el("div", "logo");
       const img = document.createElement("img");
