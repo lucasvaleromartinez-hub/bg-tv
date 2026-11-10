@@ -576,6 +576,11 @@
   let RELAY = /\.workers\.dev$|\.pages\.dev$/.test(location.hostname) ? location.origin : DEFAULT_RELAY;
   try { RELAY = JSON.parse(localStorage.getItem("relay")) || RELAY; } catch {}
   const relay = (u) => (RELAY ? RELAY + "/r?u=" + encodeURIComponent(u) : null);
+  // Lien d'origine d'un lien qui passe par le relais (pour interroger le vrai serveur de la radio).
+  const unrelay = (u) => {
+    if (!u || !RELAY || !u.startsWith(RELAY + "/r?")) return u;
+    try { return new URL(u).searchParams.get("u") || u; } catch { return u; }
+  };
   // Liens à essayer, dans l'ordre, pour un flux d'origine.
   function candidates(...originals) {
     const out = [];
@@ -734,8 +739,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v38",
-    versionName: "Relais Cloudflare branché",
+    version: "v39",
+    versionName: "Titre d'ESC Radio",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1556,7 +1561,7 @@
   }
 
   async function fetchSongTitle(c) {
-    const url = c.src || c.url;
+    const url = unrelay(c.src || c.url);
     const attempts = [];
 
     // 0. Radios AzuraCast (Darik) : l'API publique donne le titre en cours.
