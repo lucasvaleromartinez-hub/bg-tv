@@ -481,6 +481,23 @@
     .dock .round { width: 54px; height: 54px; }
     .dock .round.main { width: 68px; height: 68px; }
   }
+
+  /* ---------- Lecteur : radio, artiste, titre dans la même police ---------- */
+  .dock .title, .dock .song, .dock .song .line { font: 600 21px/1.25 var(--font-display); letter-spacing: -.01em; }
+  .dock .song { color: var(--text); white-space: normal; display: grid; gap: 2px; }
+  .dock .song .line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dock .song .line:last-child { color: var(--muted); }
+  .dock .song.muted { font-size: 15px; font-weight: 500; color: var(--muted); }
+  .radio-stage .big-song { display: grid; gap: 4px; -webkit-line-clamp: initial; }
+  .radio-stage .big-song .line { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .radio-stage .big-song .line:last-child { color: rgba(255,255,255,.75); }
+  .mini .song { color: var(--muted); }
+  @media (max-width: 760px) {
+    .dock .title, .dock .song, .dock .song .line { font-size: 18px; }
+  }
+  @container (max-height: 360px) {
+    .radio-stage .big-song .line { -webkit-line-clamp: 1; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
@@ -797,8 +814,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v43",
-    versionName: "Lecteur adapté à l'iPhone",
+    version: "v44",
+    versionName: "Radio, artiste, titre",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1545,21 +1562,26 @@
 
   const nowPlaying = { timer: null, ctrl: null };
   const noIcy = new Map();
+  const lastIcy = new Map();
 
   function startNowPlaying(c) {
     stopNowPlaying();
     if (c.kind !== "radio") return;
-    let tries = 0;
+    let tries = 0, busy = false;
     const tick = async () => {
+      if (busy) return;
+      busy = true;
       let title = "";
       try { title = await fetchSongTitle(c); } catch {}
+      busy = false;
       if (state.current !== c) return;
       tries++;
       if (title) setSong(title);
       else if (tries >= 2 && !state.song) setSongNote("Cette radio ne publie pas le titre en cours");
     };
-    setTimeout(tick, 1500);
-    nowPlaying.timer = setInterval(tick, 20000);
+    // Vérification toutes les 8 s : le nouveau titre apparaît quelques secondes après le début de la chanson.
+    setTimeout(tick, 600);
+    nowPlaying.timer = setInterval(tick, 8000);
   }
 
   function stopNowPlaying() {
@@ -1623,13 +1645,28 @@
     return artist ? latin(artist) + " – " + t : t;
   }
 
+  // « Artiste – Titre » → ["Artiste", "Titre"] (artiste vide si le titre n'a pas de séparateur).
+  function songParts(text) {
+    const m = String(text || "").match(/^(.+?)\s+[-–—]\s+(.+)$/);
+    return m ? [m[1], m[2]] : ["", String(text || "")];
+  }
+
+  // Dans le lecteur : nom de la radio, puis l'artiste, puis le titre, sur trois lignes.
+  function fillSongLines(box, text) {
+    box.innerHTML = "";
+    const [artist, title] = songParts(text);
+    if (artist) box.append(el("div", "line", artist));
+    if (title) box.append(el("div", "line", title));
+  }
+
   function showSong(text) {
     state.song = text;
-    $("song").classList.remove("muted");
-    for (const id of ["song", "miniSong"]) {
-      $(id).textContent = text ? "♪ " + text : "";
-      $(id).hidden = !text;
-    }
+    const song = $("song");
+    song.classList.remove("muted");
+    fillSongLines(song, text);
+    song.hidden = !text;
+    $("miniSong").textContent = text || "";
+    $("miniSong").hidden = !text;
   }
 
   function setSong(raw) {
@@ -1669,7 +1706,13 @@
     attempts.push(() => shoutcastTitle(url));
     // 4. Titre glissé dans le flux audio lui-même.
     // (une seule tentative par radio : ça ouvre une 2e connexion au flux, certains serveurs coupent alors l'écoute)
-    if (Date.now() - (noIcy.get(url) || 0) > 120000) attempts.push(() => icyTitle(url).then((t) => { if (!t) noIcy.set(url, Date.now()); return t; }, (e) => { noIcy.set(url, Date.now()); throw e; }));
+    // (au plus toutes les 15 s : ça ouvre une 2e connexion au flux)
+    if (Date.now() - (noIcy.get(url) || 0) > 120000 && Date.now() - (lastIcy.get(url) || 0) > 15000) {
+      attempts.push(() => {
+        lastIcy.set(url, Date.now());
+        return icyTitle(url).then((t) => { if (!t) noIcy.set(url, Date.now()); return t; }, (e) => { noIcy.set(url, Date.now()); throw e; });
+      });
+    }
 
     for (const attempt of attempts) {
       const title = await attempt().catch(() => "");
@@ -1992,6 +2035,7 @@
     $("title").textContent = c.name;
     $("sub").textContent = kindLabel(c) + (c.kind === "youtube" ? " officiel" : "") + " · " + c.group
       + (c.bitrate ? ` · ${c.codec ? c.codec + " " : ""}${c.bitrate} kbit/s` : "");
+    $("sub").hidden = c.kind === "radio" || !!c.audioOnly;
     $("liveTag").hidden = c.id === "extra:fentv-clips";
     $("playBtn").hidden = c.kind === "youtube";
     $("favBtn").setAttribute("aria-pressed", state.favorites.has(c.id));
@@ -2007,7 +2051,8 @@
       $("radioLogo").dataset.id = c.id;
       $("radioStage").style.setProperty("--a", colors(c)[0]);
     }
-    $("bigSong").textContent = state.song || c.name;
+    if (state.song) fillSongLines($("bigSong"), state.song);
+    else $("bigSong").textContent = c.name;
   }
 
   function toggleFavorite() {
