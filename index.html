@@ -739,8 +739,8 @@
     tv: [],
     radio: [],
     favorites: new Set(store.get("favorites", [])),
-    version: "v39",
-    versionName: "Titre d'ESC Radio",
+    version: "v40",
+    versionName: "Titres partout",
     playing: false,
     song: "",
     customLists: store.get("customLists", []),
@@ -1454,7 +1454,7 @@
   // ---------- Titre en cours (radios) ----------
 
   const nowPlaying = { timer: null, ctrl: null };
-  const noIcy = new Set();
+  const noIcy = new Map();
 
   function startNowPlaying(c) {
     stopNowPlaying();
@@ -1579,7 +1579,7 @@
     attempts.push(() => shoutcastTitle(url));
     // 4. Titre glissé dans le flux audio lui-même.
     // (une seule tentative par radio : ça ouvre une 2e connexion au flux, certains serveurs coupent alors l'écoute)
-    if (!noIcy.has(url)) attempts.push(() => icyTitle(url).then((t) => { if (!t) noIcy.add(url); return t; }, (e) => { noIcy.add(url); throw e; }));
+    if (Date.now() - (noIcy.get(url) || 0) > 120000) attempts.push(() => icyTitle(url).then((t) => { if (!t) noIcy.set(url, Date.now()); return t; }, (e) => { noIcy.set(url, Date.now()); throw e; }));
 
     for (const attempt of attempts) {
       const title = await attempt().catch(() => "");
@@ -1629,10 +1629,25 @@
 
   async function shoutcastTitle(url) {
     const u = new URL(url);
-    const res = await fetch(reach(u.origin + "/stats?sid=1&json=1"), { signal: AbortSignal.timeout(8000), cache: "no-store" });
-    if (!res.ok) return "";
-    const data = await res.json();
-    return data.songtitle || "";
+    const get = (path) => fetch(reach(u.origin + path), { signal: AbortSignal.timeout(8000), cache: "no-store" });
+    // Shoutcast 2 : statistiques en JSON.
+    try {
+      const res = await get("/stats?sid=1&json=1");
+      if (res.ok) { const t = (await res.json()).songtitle; if (t) return t; }
+    } catch {}
+    // Shoutcast 2 : titre seul, en texte.
+    try {
+      const res = await get("/currentsong?sid=1");
+      const t = res.ok ? (await res.text()).trim() : "";
+      if (t && t.length < 200 && !/<html/i.test(t)) return t;
+    } catch {}
+    // Shoutcast 1 : /7.html → « auditeurs,état,pic,max,uniques,débit,titre ».
+    try {
+      const res = await get("/7.html");
+      const parts = res.ok ? (await res.text()).replace(/<[^>]+>/g, "").trim().split(",") : [];
+      if (parts.length >= 7) return parts.slice(6).join(",").trim();
+    } catch {}
+    return "";
   }
 
   async function icyTitle(url) {
@@ -1760,12 +1775,25 @@
       }
       state.ytOk = true; clearTimeout(state.ytTimer); hideMessage(); setPlaying(true);
     }
+    // Titre de la vidéo en cours (clips Planeta, Fen TV…) : affiché comme le titre d'une chanson.
+    const vt = d.event === "infoDelivery" && d.info && d.info.videoData && d.info.videoData.title;
+    if (vt) setSong(cleanVideoTitle(vt));
     if (d.event === "onError") {
       clearTimeout(state.ytTimer);
       showYtProblem(c, d.info === 101 || d.info === 150 ? "Ce propriétaire interdit la lecture de ses vidéos hors de YouTube."
         : c.url.includes("live_stream") ? "Pas de direct en ce moment sur cette chaîne." : "Cette vidéo n'est pas disponible.");
     }
   });
+
+  // « Artiste - Titre (Official Video 4K) | Planeta » → « Artiste - Titre »
+  function cleanVideoTitle(t) {
+    return String(t)
+      .replace(/\s*[([【][^)\]】]*(official|video|видео|клип|audio|lyric|live|hd|4k|remix|cover|премиера|premiere)[^)\]】]*[)\]】]/gi, "")
+      .replace(/\s*[|｜].*$/, "")
+      .replace(/\s*(official\s+(music\s+)?video|официално видео)\s*$/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
 
   function showYtProblem(c, text) {
     const m = $("message");
